@@ -99,6 +99,7 @@ class AppEn {
     'error_fetching_status': 'Error fetching server status',
     'error_status_code': 'Error {0} fetching server status',
     'error_connection': 'Connection error: {0}',
+    'server_timeout': 'Connection timeout. Server is not responding.',
     'global_chat': 'Global Chat',
     'trade_chat': 'Trade Chat',
     'help_chat': 'Help Chat',

@@ -36,7 +36,7 @@ class WebSocketService extends ChangeNotifier {
   
   // Lista de eventos inscritos
   final Set<String> _subscribedEvents = {};
-  bool _isReconnecting = false;
+  final bool _isReconnecting = false;
 
   Stream<SystemData> get systemDataStream => _systemDataController.stream;
   Stream<ServerStatus> get serverStatusStream => _serverStatusController.stream;

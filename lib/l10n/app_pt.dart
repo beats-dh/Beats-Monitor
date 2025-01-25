@@ -67,6 +67,13 @@ class AppPt {
     'logout': 'Sair',
     'logout_confirm': 'Deseja realmente sair?',
     
+    // Erros
+    'error_connection': 'Erro de conexão: {0}',
+    'error_status_code': 'Erro no servidor: {0}',
+    'error_fetching_status': 'Erro ao buscar status do servidor',
+    'server_timeout': 'Tempo limite de conexão excedido. Servidor não está respondendo.',
+  
+    
     // Server Info Screen
     'state_control': 'Controle de Estado',
     'name': 'Nome',
@@ -94,9 +101,6 @@ class AppPt {
     'connecting': 'Conectando...',
     'update_failed': 'Falha ao atualizar',
     'request_error': 'Erro na requisição',
-    'error_fetching_status': 'Erro ao buscar status do servidor',
-    'error_status_code': 'Erro {0} ao buscar status do servidor',
-    'error_connection': 'Erro de conexão: {0}',
     'global_chat': 'Chat Global',
     'trade_chat': 'Chat de Trade',
     'help_chat': 'Chat de Ajuda',
