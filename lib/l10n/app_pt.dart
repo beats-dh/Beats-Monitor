@@ -2,14 +2,20 @@ class AppPt {
   static const Map<String, String> values = {
     // Títulos
     'app_title': 'Beats Monitor',
-    'system_monitor': 'Monitor do Sistema',
-    'server_info': 'Informações do Servidor',
+    'monitor_title': 'Monitor',
+    'server_info_title': 'Informações do Servidor',
+    'server_status_title': 'Status do Servidor',
+    'chat_title': 'Chat',
+    'config_title': 'Configurações',
     'settings': 'Configurações',
     'login': 'Login',
     
     // Descrições
-    'system_monitor_desc': 'Monitoramento em tempo real do sistema',
+    'monitor_desc': 'Monitoramento em tempo real do sistema',
     'server_info_desc': 'Detalhes e status do servidor',
+    'server_status_desc': 'Status atual do servidor',
+    'chat_desc': 'Chat em tempo real',
+    'config_desc': 'Ajustes e preferências',
     'settings_desc': 'Ajustes e preferências',
     
     // Configurações
@@ -62,7 +68,6 @@ class AppPt {
     'logout_confirm': 'Deseja realmente sair?',
     
     // Server Info Screen
-    'server_status': 'Status do Servidor',
     'state_control': 'Controle de Estado',
     'name': 'Nome',
     'version': 'Versão',
@@ -80,7 +85,6 @@ class AppPt {
     'maintenance': 'MANUTENÇÃO',
     'shutting_down': 'DESLIGANDO',
     'cancel_button': 'Cancelar',
-    'server_info_title': 'Informações do Servidor',
     'button_online': 'Online',
     'button_offline': 'Offline',
     'button_maintenance': 'Manutenção',
@@ -93,9 +97,6 @@ class AppPt {
     'error_fetching_status': 'Erro ao buscar status do servidor',
     'error_status_code': 'Erro {0} ao buscar status do servidor',
     'error_connection': 'Erro de conexão: {0}',
-    'config': 'Configurações',
-    'monitor': 'Monitor',
-    'chat': 'Chat',
     'global_chat': 'Chat Global',
     'trade_chat': 'Chat de Trade',
     'help_chat': 'Chat de Ajuda',
