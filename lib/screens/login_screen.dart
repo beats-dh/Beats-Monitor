@@ -1,12 +1,12 @@
+import 'package:beats_monitor/screens/config_screen.dart';
+import 'package:beats_monitor/widgets/page_transition.dart';
 import 'package:beats_monitor/services/websocket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-import '../screens/config_screen.dart';
-import '../widgets/page_transition.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
+  const LoginScreen({super.key});
 
   @override
   State<LoginScreen> createState() => LoginScreenState();
