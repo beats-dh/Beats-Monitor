@@ -1,16 +1,16 @@
+import 'dart:io';
+import 'package:beats_monitor/services/download_service.dart';
+import 'package:beats_monitor/services/platform_service.dart';
+import 'package:beats_monitor/services/update_service.dart';
+import 'package:beats_monitor/services/websocket_service.dart';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../services/config_service.dart';
-import '../services/websocket_service.dart';
-import '../services/update_service.dart';
-import '../services/download_service.dart';
-import '../services/platform_service.dart';
 import '../providers/theme_provider.dart';
-import 'dart:io';
-import 'package:permission_handler/permission_handler.dart';
 
 class ConfigScreen extends StatefulWidget {
-  const ConfigScreen({Key? key}) : super(key: key);
+  const ConfigScreen({super.key});
 
   @override
   State<ConfigScreen> createState() => _ConfigScreenState();
@@ -216,7 +216,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(updateInfo.changelog),

@@ -5,6 +5,8 @@ import 'package:beats_monitor/services/auth_service.dart';
 import 'package:beats_monitor/services/config_service.dart';
 
 class ApiService {
+  static const Duration _timeout = Duration(seconds: 10);
+
   static Future<bool> _refreshTokenIfNeeded() async {
     if (AuthService.hasCredentials) {
       return await AuthService.refreshToken();
@@ -26,7 +28,7 @@ class ApiService {
       final response = await http.get(
         Uri.parse('${ConfigService().apiBaseUrl}/$endpoint'),
         headers: headers,
-      );
+      ).timeout(_timeout);
 
       if (response.statusCode == 401) {
         // Token expirado, tenta renovar
@@ -50,7 +52,7 @@ class ApiService {
         Uri.parse('${ConfigService().apiBaseUrl}/$endpoint'),
         headers: headers,
         body: body != null ? json.encode(body) : null,
-      );
+      ).timeout(_timeout);
 
       if (response.statusCode == 401) {
         // Token expirado, tenta renovar
@@ -74,7 +76,7 @@ class ApiService {
         Uri.parse('${ConfigService().apiBaseUrl}/$endpoint'),
         headers: headers,
         body: body != null ? json.encode(body) : null,
-      );
+      ).timeout(_timeout);
       return response;
     } catch (e) {
       debugPrint('PUT request error: $e');
@@ -88,7 +90,7 @@ class ApiService {
       final response = await http.delete(
         Uri.parse('${ConfigService().apiBaseUrl}/$endpoint'),
         headers: headers,
-      );
+      ).timeout(_timeout);
       return response;
     } catch (e) {
       debugPrint('DELETE request error: $e');
