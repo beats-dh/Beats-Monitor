@@ -16,10 +16,6 @@ class ConnectionStatusPopup extends StatefulWidget {
 }
 
 class _ConnectionStatusPopupState extends State<ConnectionStatusPopup> {
-  void _log(String message) {
-    debugPrint('[ConnectionStatusPopup] $message');
-  }
-
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
@@ -29,10 +25,8 @@ class _ConnectionStatusPopupState extends State<ConnectionStatusPopup> {
     return Consumer<WebSocketService>(
       builder: (context, webSocketService, _) {
         final isConnected = webSocketService.connectionStatus;
-        _log('Status da conexão: $isConnected');
 
         if (isConnected) {
-          _log('Conexão ativa, escondendo popup');
           return const SizedBox.shrink();
         }
 
@@ -50,7 +44,6 @@ class _ConnectionStatusPopupState extends State<ConnectionStatusPopup> {
           return '${l10n.translate('trying_reconnect')} ($attempts)';
         }
 
-        _log('Sem conexão, mostrando popup');
         return Align(
           alignment: Alignment.bottomCenter,
           child: Container(

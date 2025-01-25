@@ -24,20 +24,22 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
   bool get wantKeepAlive => true;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_initialized) {
-      _webSocketService = context.read<WebSocketService>();
-      _webSocketService.manualReconnectMode = false;
-      _webSocketService.startConnection();
-      _webSocketService.subscribe([
-        'chat_global',
-        'chat_trade',
-        'chat_help',
-      ]);
-      _setupMessageSubscription();
-      _initialized = true;
-    }
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_initialized) {
+        _webSocketService = context.read<WebSocketService>();
+        _webSocketService.manualReconnectMode = false;
+        _webSocketService.startConnection();
+        _webSocketService.subscribe([
+          'chat_global',
+          'chat_trade',
+          'chat_help',
+        ]);
+        _setupMessageSubscription();
+        _initialized = true;
+      }
+    });
   }
 
   void _setupMessageSubscription() {
@@ -46,10 +48,11 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
       debugPrint('Canal atual: $_selectedChannel');
       if (message.channel == 'chat_$_selectedChannel') {
         debugPrint('Adicionando mensagem: ${message.player}: ${message.message}');
-        setState(() {
-          _messages.add(message);
-        });
-        _scrollToBottom();
+        if (mounted) {
+          setState(() {
+            _messages.add(message);
+          });
+        }
       }
     });
   }
@@ -57,16 +60,18 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
   @override
   void dispose() {
     _subscription?.cancel();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_webSocketService.manualReconnectMode) {
+        _webSocketService.unsubscribe([
+          'chat_global',
+          'chat_trade',
+          'chat_help',
+        ]);
+        _webSocketService.closeCurrentConnection();
+      }
+      _webSocketService.manualReconnectMode = true;
+    });
     _scrollController.dispose();
-    if (!_webSocketService.manualReconnectMode) {
-      _webSocketService.unsubscribe([
-        'chat_global',
-        'chat_trade',
-        'chat_help',
-      ]);
-      _webSocketService.closeCurrentConnection();
-    }
-    _webSocketService.manualReconnectMode = true;
     super.dispose();
   }
 

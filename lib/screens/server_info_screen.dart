@@ -349,7 +349,7 @@ class _ServerInfoScreenState extends State<ServerInfoScreen> {
       canPop: !(_isLoading || _isChangingState),
       child: Scaffold(
         appBar: AppBar(
-          title: Text(l10n.translate('server_status')),
+          title: Text(l10n.translate('server_info_title')),
           centerTitle: true,
           actions: [
             Stack(

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:beats_monitor/l10n/app_localizations.dart';
 import 'package:beats_monitor/services/download_service.dart';
 import 'package:beats_monitor/services/platform_service.dart';
 import 'package:beats_monitor/services/update_service.dart';
@@ -260,10 +261,11 @@ class _ConfigScreenState extends State<ConfigScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final themeProvider = context.watch<ThemeProvider>();
+    final l10n = AppLocalizations.of(context);
     
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Configurações'),
+        title: Text(l10n.translate('config_title')),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),

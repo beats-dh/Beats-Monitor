@@ -24,24 +24,28 @@ class _MonitorScreenState extends State<MonitorScreen> {
   bool _initialized = false;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_initialized) {
-      _webSocketService = context.read<WebSocketService>();
-      _webSocketService.manualReconnectMode = false;
-      _webSocketService.startConnection();
-      _webSocketService.subscribe(['system_resources']);
-      _initialized = true;
-    }
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_initialized) {
+        _webSocketService = context.read<WebSocketService>();
+        _webSocketService.manualReconnectMode = false;
+        _webSocketService.startConnection();
+        _webSocketService.subscribe(['system_resources']);
+        _initialized = true;
+      }
+    });
   }
 
   @override
   void dispose() {
-    if (!_webSocketService.manualReconnectMode) {
-      _webSocketService.unsubscribe(['system_resources']);
-      _webSocketService.closeCurrentConnection();
-    }
-    _webSocketService.manualReconnectMode = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_webSocketService.manualReconnectMode) {
+        _webSocketService.unsubscribe(['system_resources']);
+        _webSocketService.closeCurrentConnection();
+      }
+      _webSocketService.manualReconnectMode = true;
+    });
     super.dispose();
   }
 
@@ -65,7 +69,7 @@ class _MonitorScreenState extends State<MonitorScreen> {
             children: [
               const Icon(Icons.monitor_heart_rounded),
               const SizedBox(width: 12),
-              Text(l10n.translate('monitor')),
+              Text(l10n.translate('monitor_title')),
             ],
           ),
         ),
