@@ -13,12 +13,14 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMixin {
-  final List<ChatMessage> _messages = [];
   final ScrollController _scrollController = ScrollController();
   String _selectedChannel = 'global';
   StreamSubscription<ChatMessage>? _subscription;
   late WebSocketService _webSocketService;
   bool _initialized = false;
+  final Set<String> _messageKeys = {};
+  final List<ChatMessage> _messages = [];
+  bool _historyReceived = false;
 
   Color get _channelColor {
     switch (_selectedChannel) {
@@ -33,6 +35,82 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     }
   }
 
+  String _getMessageKey(ChatMessage message) {
+    return '${message.channel}_${message.player}_${message.timestamp.millisecondsSinceEpoch}_${message.message}';
+  }
+
+  void _addMessage(ChatMessage message) {
+    final key = _getMessageKey(message);
+    if (_messageKeys.add(key)) { // Retorna true se a key não existia
+      setState(() {
+        _messages.add(message);
+        // Ordena as mensagens por timestamp
+        _messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      });
+    }
+  }
+
+  bool _isNearBottom() {
+    if (!_scrollController.hasClients) return true;
+    
+    final position = _scrollController.position;
+    // Aumentando o threshold e considerando também quando está no final
+    const threshold = 150.0;
+    return position.pixels >= (position.maxScrollExtent - threshold) ||
+           position.pixels == position.maxScrollExtent;
+  }
+
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      // Adicionando um pequeno delay para garantir que o layout foi atualizado
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted && _scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
+  }
+
+  void _setupMessageSubscription() {
+    _subscription = _webSocketService.chatMessageStream.listen((message) {
+      if (mounted) {
+        final wasNearBottom = _isNearBottom();
+        
+        // Se for uma mensagem do histórico
+        if (message.timestamp.isBefore(DateTime.now().subtract(const Duration(seconds: 5)))) {
+          _addMessage(message);
+          
+          // Agenda um único scroll após receber todo o histórico
+          if (!_historyReceived) {
+            Future.delayed(const Duration(milliseconds: 300), () {
+              if (mounted) {
+                setState(() {
+                  _historyReceived = true;
+                });
+                _scrollToBottom();
+              }
+            });
+          }
+        } else {
+          // Se for uma mensagem nova
+          _addMessage(message);
+          
+          // Verifica se a mensagem é do canal atual
+          if (message.channel.replaceAll('chat_', '') == _selectedChannel) {
+            // Se estava próximo do final, faz o scroll
+            if (wasNearBottom) {
+              _scrollToBottom();
+            }
+          }
+        }
+      }
+    });
+  }
+
   @override
   bool get wantKeepAlive => true;
 
@@ -43,27 +121,31 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
       if (!_initialized) {
         _webSocketService = context.read<WebSocketService>();
         _webSocketService.manualReconnectMode = false;
+        
+        // Inscreve-se no stream de status da conexão
+        _webSocketService.connectionStatusStream.listen((isConnected) {
+          if (isConnected) {
+            // Solicita o histórico do chat apenas quando conectado
+            _webSocketService.sendMessage({
+              'type': 'chat_history',
+              'channel': 'chat_$_selectedChannel'
+            });
+          }
+        });
+
+        // Inicia a conexão
         _webSocketService.startConnection();
+        
+        // Se inscreve nos canais de chat
         _webSocketService.subscribe([
           'chat_global',
           'chat_trade',
           'chat_help',
+          'chat_history'  // Precisa subscrever para receber o histórico
         ]);
+        
         _setupMessageSubscription();
         _initialized = true;
-      }
-    });
-  }
-
-  void _setupMessageSubscription() {
-    _subscription = _webSocketService.chatMessageStream.listen((message) {
-      if (mounted) {
-        setState(() {
-          _messages.add(message);
-        });
-        if (message.channel == 'chat_$_selectedChannel') {
-          _scrollToBottom();
-        }
       }
     });
   }
@@ -77,38 +159,22 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
           'chat_global',
           'chat_trade',
           'chat_help',
+          'chat_history'
         ]);
         _webSocketService.closeCurrentConnection();
       }
       _webSocketService.manualReconnectMode = true;
     });
     _scrollController.dispose();
+    // Limpa as mensagens e as chaves ao fechar
+    _messages.clear();
+    _messageKeys.clear();
+    _historyReceived = false;
     super.dispose();
   }
 
-  void _scrollToBottom() {
-    if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    }
-  }
-
-  String _formatTimestamp(DateTime timestamp) {
-    final now = DateTime.now();
-    final difference = now.difference(timestamp);
-    
-    if (difference.inMinutes < 1) {
-      return 'Agora';
-    } else if (difference.inHours < 1) {
-      return '${difference.inMinutes}m atrás';
-    } else if (difference.inDays < 1) {
-      return '${difference.inHours}h atrás';
-    } else {
-      return '${timestamp.day.toString().padLeft(2, '0')}/${timestamp.month.toString().padLeft(2, '0')} ${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
-    }
+  String _formatChatTime(DateTime timestamp) {
+    return '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
   }
 
   Widget _buildChannelSelector() {
@@ -162,63 +228,47 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-      child: Row(
-        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-        children: [
-          if (!isMe) ...[
-            CircleAvatar(
-              backgroundColor: _channelColor.withOpacity(0.1),
-              child: Text(
-                message.player[0].toUpperCase(),
-                style: TextStyle(color: _channelColor),
+      child: Card(
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          title: RichText(
+            text: TextSpan(
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.textTheme.bodyLarge?.color,
               ),
-            ),
-            const SizedBox(width: 8),
-          ],
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: isMe ? _channelColor.withOpacity(0.1) : theme.cardColor,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isMe ? _channelColor.withOpacity(0.3) : Colors.grey.withOpacity(0.1),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                children: [
-                  if (!isMe)
-                    Text(
-                      message.player,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: _channelColor,
-                      ),
-                    ),
-                  Text(message.message),
-                  const SizedBox(height: 4),
-                  Text(
-                    _formatTimestamp(message.timestamp),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.grey,
-                    ),
+              children: [
+                TextSpan(
+                  text: _formatChatTime(message.timestamp),
+                  style: const TextStyle(
+                    color: Colors.grey,
                   ),
-                ],
-              ),
+                ),
+                const TextSpan(text: ' '),
+                TextSpan(
+                  text: message.player,
+                  style: TextStyle(
+                    color: _channelColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                TextSpan(
+                  text: ' [${message.level}]: ',
+                  style: const TextStyle(
+                    color: Colors.grey,
+                  ),
+                ),
+                TextSpan(
+                  text: message.message,
+                  style: TextStyle(
+                    color: theme.textTheme.bodyLarge?.color,
+                    fontSize: 15,
+                    height: 1.2,
+                  ),
+                ),
+              ],
             ),
           ),
-          if (isMe) ...[
-            const SizedBox(width: 8),
-            CircleAvatar(
-              backgroundColor: _channelColor.withOpacity(0.1),
-              child: Text(
-                message.player[0].toUpperCase(),
-                style: TextStyle(color: _channelColor),
-              ),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
@@ -246,14 +296,27 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     );
   }
 
+  Widget _buildMessageList() {
+    // Filtra as mensagens pelo canal selecionado
+    final channelMessages = _messages.where(
+      (msg) => msg.channel.replaceAll('chat_', '') == _selectedChannel
+    ).toList();
+
+    return ListView.builder(
+      controller: _scrollController,
+      itemCount: channelMessages.length,
+      itemBuilder: (context, index) {
+        final message = channelMessages[index];
+        return _buildMessageBubble(message, false);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-
-    // Filtra as mensagens do canal atual
-    final channelMessages = _messages.where((msg) => msg.channel == 'chat_$_selectedChannel').toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -270,18 +333,9 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
           _buildChannelSelector(),
           const Divider(height: 1),
           Expanded(
-            child: channelMessages.isEmpty
+            child: _messages.isEmpty
                 ? _buildEmptyChannelMessage()
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(8),
-                    itemCount: channelMessages.length,
-                    itemBuilder: (context, index) {
-                      final message = channelMessages[index];
-                      final isMe = message.player == 'Você';
-                      return _buildMessageBubble(message, isMe);
-                    },
-                  ),
+                : _buildMessageList(),
           ),
         ],
       ),

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../models/system_data.dart';
 import '../models/events.dart';
+import '../models/websocket_events.dart';
 import '../services/auth_service.dart';
 import '../services/config_service.dart';
 
@@ -144,35 +145,53 @@ class WebSocketService extends ChangeNotifier {
           
         case 'pong':
           return;
-          
+
         case 'event':
           final eventType = jsonData['event'] as String?;
+          _log('Evento recebido: $eventType');
+          
           if (!_subscribedEvents.contains(eventType)) {
             _log('Evento $eventType recebido mas não inscrito, ignorando');
             return;
           }
 
           final data = jsonData['data'] as Map<String, dynamic>;
-          _log('Evento recebido: $eventType');
+          
+          if (eventType == WebSocketEvents.CHAT_HISTORY) {
+            // Processa cada canal
+            data.forEach((channel, messages) {
+              if (messages is List) {
+                for (final msgData in messages) {
+                  if (msgData is Map<String, dynamic>) {
+                    final message = ChatMessage.fromJson({
+                      ...msgData,
+                      'channel': channel,
+                    });
+                    _chatMessageController.add(message);
+                  }
+                }
+              }
+            });
+            return;
+          }
           
           switch (eventType) {
-            case 'chat_global':
-            case 'chat_trade':
-            case 'chat_help':
+            case WebSocketEvents.CHAT_GLOBAL:
+            case WebSocketEvents.CHAT_TRADE:
+            case WebSocketEvents.CHAT_HELP:
               final message = ChatMessage.fromJson({
                 ...data,
                 'channel': eventType,
               });
-              _log('Mensagem de chat processada: ${message.player} em ${message.channel}: ${message.message}');
               _chatMessageController.add(message);
               break;
               
-            case 'system_resources':
+            case WebSocketEvents.SYSTEM_RESOURCES:
               final systemData = SystemData.fromJson({'data': data});
               _systemDataController.add(systemData);
               break;
               
-            case 'server_status':
+            case WebSocketEvents.SERVER_STATUS:
               final serverStatus = ServerStatus.fromJson(data);
               _serverStatusController.add(serverStatus);
               break;
@@ -196,18 +215,14 @@ class WebSocketService extends ChangeNotifier {
 
   void handleMessage(String message) {
     try {
-      final jsonData = jsonDecode(message);
+      // Decodifica a mensagem recebida como UTF-8
+      final bytes = utf8.encode(message);
+      final decodedMessage = utf8.decode(bytes, allowMalformed: true);
       
-      if (jsonData is Map<String, dynamic>) {
-        // Adiciona timestamp atual se não existir
-        if (!jsonData.containsKey('timestamp')) {
-          jsonData['timestamp'] = (DateTime.now().millisecondsSinceEpoch / 1000).floor();
-        }
-        
-        _processMessage(jsonData);
-      }
-    } catch (e, stackTrace) {
-      _log('Erro ao decodificar mensagem: $e\n$stackTrace');
+      final jsonData = jsonDecode(decodedMessage) as Map<String, dynamic>;
+      _processMessage(jsonData);
+    } catch (e) {
+      _log('Erro ao processar mensagem: $e');
     }
   }
 
@@ -372,6 +387,19 @@ class WebSocketService extends ChangeNotifier {
     } finally {
       _isConnecting = false;
       notifyListeners();
+    }
+  }
+
+  void sendMessage(Map<String, dynamic> message) {
+    if (_channel != null && _isConnected) {
+      try {
+        final jsonMessage = jsonEncode(message);
+        _channel!.sink.add(jsonMessage);
+      } catch (e) {
+        _log('Erro ao enviar mensagem: $e');
+      }
+    } else {
+      _log('Tentativa de enviar mensagem sem conexão ativa');
     }
   }
 

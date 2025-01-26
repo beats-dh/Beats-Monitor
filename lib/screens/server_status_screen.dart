@@ -166,7 +166,7 @@ class _ServerStatusScreenState extends State<ServerStatusScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              '$online/${max} (${percentage}%)',
+              '$online/$max ($percentage%)',
               style: theme.textTheme.headlineSmall?.copyWith(
                 color: Colors.green,
                 fontWeight: FontWeight.bold,
