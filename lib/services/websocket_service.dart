@@ -37,7 +37,6 @@ class WebSocketService extends ChangeNotifier {
   
   // Lista de eventos inscritos
   final Set<String> _subscribedEvents = {};
-  final bool _isReconnecting = false;
 
   Stream<SystemData> get systemDataStream => _systemDataController.stream;
   Stream<ServerStatus> get serverStatusStream => _serverStatusController.stream;
@@ -157,7 +156,7 @@ class WebSocketService extends ChangeNotifier {
 
           final data = jsonData['data'] as Map<String, dynamic>;
           
-          if (eventType == WebSocketEvents.CHAT_HISTORY) {
+          if (eventType == WebSocketEvents.chatHistory) {
             // Processa cada canal
             data.forEach((channel, messages) {
               if (messages is List) {
@@ -176,9 +175,9 @@ class WebSocketService extends ChangeNotifier {
           }
           
           switch (eventType) {
-            case WebSocketEvents.CHAT_GLOBAL:
-            case WebSocketEvents.CHAT_TRADE:
-            case WebSocketEvents.CHAT_HELP:
+            case WebSocketEvents.chatGlobal:
+            case WebSocketEvents.chatTrade:
+            case WebSocketEvents.chatHelp:
               final message = ChatMessage.fromJson({
                 ...data,
                 'channel': eventType,
@@ -186,12 +185,12 @@ class WebSocketService extends ChangeNotifier {
               _chatMessageController.add(message);
               break;
               
-            case WebSocketEvents.SYSTEM_RESOURCES:
+            case WebSocketEvents.systemResources:
               final systemData = SystemData.fromJson({'data': data});
               _systemDataController.add(systemData);
               break;
               
-            case WebSocketEvents.SERVER_STATUS:
+            case WebSocketEvents.serverStatus:
               final serverStatus = ServerStatus.fromJson(data);
               _serverStatusController.add(serverStatus);
               break;

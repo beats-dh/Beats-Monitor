@@ -56,7 +56,7 @@ class _MonitorScreenState extends State<MonitorScreen> {
 
     return PopScope(
       canPop: true,
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, result) {
         if (!websocketService.manualReconnectMode) {
           websocketService.unsubscribe(['system_resources']);
           websocketService.closeCurrentConnection();
@@ -84,8 +84,7 @@ class _MonitorScreenState extends State<MonitorScreen> {
                     return Container(
                       alignment: Alignment.center,
                       margin: EdgeInsets.only(
-                        bottom: MediaQuery.of(context).size.height * 0.1
-                      ),
+                          bottom: MediaQuery.of(context).size.height * 0.1),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -94,11 +93,14 @@ class _MonitorScreenState extends State<MonitorScreen> {
                             size: MediaQuery.of(context).size.width * 0.15,
                             color: Colors.grey,
                           ),
-                          SizedBox(height: MediaQuery.of(context).size.height * 0.02),
+                          SizedBox(
+                              height:
+                                  MediaQuery.of(context).size.height * 0.02),
                           Text(
                             l10n.translate('no_server_connection'),
                             style: TextStyle(
-                              fontSize: MediaQuery.of(context).size.width * 0.045,
+                              fontSize:
+                                  MediaQuery.of(context).size.width * 0.045,
                               color: Colors.grey,
                             ),
                           ),
@@ -120,11 +122,14 @@ class _MonitorScreenState extends State<MonitorScreen> {
                                 height: MediaQuery.of(context).size.width * 0.1,
                                 child: const CircularProgressIndicator(),
                               ),
-                              SizedBox(height: MediaQuery.of(context).size.height * 0.02),
+                              SizedBox(
+                                  height: MediaQuery.of(context).size.height *
+                                      0.02),
                               Text(
                                 'Carregando dados do sistema...',
                                 style: TextStyle(
-                                  fontSize: MediaQuery.of(context).size.width * 0.04,
+                                  fontSize:
+                                      MediaQuery.of(context).size.width * 0.04,
                                   color: Colors.grey,
                                 ),
                               ),
@@ -143,15 +148,19 @@ class _MonitorScreenState extends State<MonitorScreen> {
                             const SizedBox(height: 16),
                             const MemoryUsageCard(),
                             const SizedBox(height: 16),
-                            SystemCpuInfoCard(systemInfo: systemData.systemInfo),
+                            SystemCpuInfoCard(
+                                systemInfo: systemData.systemInfo),
                             const SizedBox(height: 16),
                             const ProcessorCard(),
                             const SizedBox(height: 16),
-                            SystemMemoryCard(memoryInfo: systemData.systemInfo.memory),
+                            SystemMemoryCard(
+                                memoryInfo: systemData.systemInfo.memory),
                             const SizedBox(height: 16),
-                            ProcessInfoCard(processData: systemData.processData),
+                            ProcessInfoCard(
+                                processData: systemData.processData),
                             const SizedBox(height: 16),
-                            SystemCacheCard(memoryInfo: systemData.systemInfo.memory),
+                            SystemCacheCard(
+                                memoryInfo: systemData.systemInfo.memory),
                           ],
                         ),
                       );

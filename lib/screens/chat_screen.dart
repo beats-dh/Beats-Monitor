@@ -12,7 +12,7 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMixin {
+class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   String _selectedChannel = 'global';
   StreamSubscription<ChatMessage>? _subscription;
@@ -21,6 +21,8 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
   final Set<String> _messageKeys = {};
   final List<ChatMessage> _messages = [];
   bool _historyReceived = false;
+  final TextEditingController _messageController = TextEditingController();
+  bool _isSending = false;
 
   Color get _channelColor {
     switch (_selectedChannel) {
@@ -111,12 +113,58 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     });
   }
 
+  Future<void> _sendMessage(String text) async {
+    if (text.trim().isEmpty || _isSending) return;
+
+    try {
+      setState(() => _isSending = true);
+
+      // Envia a mensagem usando o canal selecionado atual
+      _webSocketService.sendMessage({
+        'type': 'chat_message',
+        'data': {
+          'message': text.trim(),
+          'channel': 'chat_$_selectedChannel' // Usa o canal selecionado
+        }
+      });
+
+      // Limpa o campo de texto
+      _messageController.clear();
+      
+      // Rola para o final da lista
+      if (_scrollController.hasClients) {
+        await _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    } catch (e) {
+      // Mostra erro para o usuário
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).translate('error_sending_message')),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSending = false);
+      }
+    }
+  }
+
   @override
   bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
+    // Registra o observer do teclado
+    WidgetsBinding.instance.addObserver(this);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_initialized) {
         _webSocketService = context.read<WebSocketService>();
@@ -152,7 +200,13 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
 
   @override
   void dispose() {
+    // Remove o observer do teclado
+    WidgetsBinding.instance.removeObserver(this);
+    _messageController.dispose();
     _subscription?.cancel();
+    _scrollController.dispose();
+
+    // Remove inscrição dos canais e fecha conexão
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_webSocketService.manualReconnectMode) {
         _webSocketService.unsubscribe([
@@ -165,61 +219,108 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
       }
       _webSocketService.manualReconnectMode = true;
     });
-    _scrollController.dispose();
-    // Limpa as mensagens e as chaves ao fechar
+
+    // Limpa as mensagens
     _messages.clear();
     _messageKeys.clear();
     _historyReceived = false;
+    
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    // Verifica se o teclado está visível
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    if (bottomInset > 0 && _messages.isNotEmpty) {
+      // Teclado apareceu, rola para a última mensagem
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
   }
 
   String _formatChatTime(DateTime timestamp) {
     return '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
   }
 
+  void _selectChannel(String channel) {
+    setState(() {
+      _selectedChannel = channel;
+    });
+
+    // Rola para o final quando trocar de canal
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
   Widget _buildChannelSelector() {
     final l10n = AppLocalizations.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildChannelButton('global', l10n.translate('global_chat'), Colors.blue),
-          _buildChannelButton('trade', l10n.translate('trade_chat'), Colors.green),
-          _buildChannelButton('help', l10n.translate('help_chat'), Colors.orange),
+          TextButton(
+            onPressed: () => _selectChannel('global'),
+            style: TextButton.styleFrom(
+              backgroundColor: _selectedChannel == 'global' ? _channelColor.withAlpha(25) : null,
+              foregroundColor: _selectedChannel == 'global' ? _channelColor : null,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(
+                  color: _selectedChannel == 'global' ? _channelColor : Colors.transparent,
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            ),
+            child: Text(l10n.translate('global_chat')),
+          ),
+          TextButton(
+            onPressed: () => _selectChannel('trade'),
+            style: TextButton.styleFrom(
+              backgroundColor: _selectedChannel == 'trade' ? _channelColor.withAlpha(25) : null,
+              foregroundColor: _selectedChannel == 'trade' ? _channelColor : null,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(
+                  color: _selectedChannel == 'trade' ? _channelColor : Colors.transparent,
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            ),
+            child: Text(l10n.translate('trade_chat')),
+          ),
+          TextButton(
+            onPressed: () => _selectChannel('help'),
+            style: TextButton.styleFrom(
+              backgroundColor: _selectedChannel == 'help' ? _channelColor.withAlpha(25) : null,
+              foregroundColor: _selectedChannel == 'help' ? _channelColor : null,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(
+                  color: _selectedChannel == 'help' ? _channelColor : Colors.transparent,
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            ),
+            child: Text(l10n.translate('help_chat')),
+          ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildChannelButton(String channel, String label, Color color) {
-    final isSelected = _selectedChannel == channel;
-    return InkWell(
-      onTap: () {
-        if (_selectedChannel != channel) {
-          setState(() {
-            _selectedChannel = channel;
-          });
-        }
-      },
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected ? color : Colors.grey.withOpacity(0.3),
-            width: 1.5,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? color : Colors.grey,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
       ),
     );
   }
@@ -282,7 +383,7 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
           Icon(
             Icons.chat_bubble_outline,
             size: 48,
-            color: _channelColor.withOpacity(0.5),
+            color: _channelColor.withAlpha(128),
           ),
           const SizedBox(height: 16),
           Text(
@@ -315,8 +416,8 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -336,6 +437,92 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
             child: _messages.isEmpty
                 ? _buildEmptyChannelMessage()
                 : _buildMessageList(),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: theme.cardColor,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(25),
+                  blurRadius: 4,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Container(
+                    constraints: const BoxConstraints(maxHeight: 120),
+                    decoration: BoxDecoration(
+                      color: theme.scaffoldBackgroundColor,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: theme.dividerColor.withAlpha(25),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _messageController,
+                            decoration: InputDecoration(
+                              hintText: l10n.translate('type_message'),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+                              hintStyle: TextStyle(
+                                color: theme.hintColor.withAlpha(153),
+                              ),
+                            ),
+                            maxLines: null,
+                            keyboardType: TextInputType.multiline,
+                            textInputAction: TextInputAction.newline,
+                            style: theme.textTheme.bodyMedium,
+                            enabled: !_isSending,
+                            onSubmitted: (text) {
+                              if (text.isNotEmpty) {
+                                _sendMessage(text);
+                              }
+                            },
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4, bottom: 4),
+                          child: IconButton(
+                            onPressed: _isSending 
+                                ? null 
+                                : () {
+                                    final text = _messageController.text;
+                                    if (text.isNotEmpty) {
+                                      _sendMessage(text);
+                                    }
+                                  },
+                            style: IconButton.styleFrom(
+                              backgroundColor: theme.colorScheme.primary,
+                              foregroundColor: theme.colorScheme.onPrimary,
+                              padding: const EdgeInsets.all(10),
+                            ),
+                            icon: _isSending
+                                ? SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white.withAlpha(255)),
+                                    ),
+                                  )
+                                : const Icon(Icons.send_rounded),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

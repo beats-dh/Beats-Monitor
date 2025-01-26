@@ -37,14 +37,161 @@ class _ConfigScreenState extends State<ConfigScreen> {
 
   Future<void> _checkForUpdates() async {
     if (!mounted) return;
+    
     setState(() => _checkingUpdate = true);
+
     try {
-      await UpdateService.instance.checkForUpdates();
+      final updateInfo = await UpdateService.instance.checkForUpdates();
+      
+      if (!mounted) return;
+      final currentContext = context;
+      
+      if (updateInfo == null) {
+        ScaffoldMessenger.of(currentContext).showSnackBar(
+          const SnackBar(
+            content: Text('Você está usando a versão mais recente'),
+          ),
+        );
+        return;
+      }
+
+      await _showUpdateDialog(currentContext, updateInfo.url);
     } finally {
       if (mounted) {
         setState(() => _checkingUpdate = false);
       }
     }
+  }
+
+  Future<void> _showUpdateDialog(BuildContext parentContext, String url) async {
+    final updateInfo = await UpdateService.instance.checkForUpdates();
+    if (updateInfo == null || !mounted) return;
+
+    // Verifica permissão antes de tudo
+    if (Platform.isAndroid) {
+      final status = await Permission.requestInstallPackages.status;
+      if (!status.isGranted && mounted) {
+        // Mostra diálogo explicando a necessidade da permissão
+        final shouldRequest = await showDialog<bool>(
+          context: parentContext,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Permissão Necessária'),
+            content: const Text(
+              'Para instalar atualizações automaticamente, é necessário permitir a instalação de aplicativos desconhecidos por este app.\n\n'
+              'Na próxima tela, ative a opção "Permitir desta fonte".'
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Continuar'),
+              ),
+            ],
+          ),
+        );
+
+        if (!mounted || shouldRequest != true) return;
+
+        final permissionStatus = await Permission.requestInstallPackages.request();
+        if (!mounted || !permissionStatus.isGranted) return;
+      }
+    }
+
+    if (!mounted) return;
+
+    // Mostra diálogo de confirmação
+    final shouldDownload = await showDialog<bool>(
+      context: parentContext,
+      barrierDismissible: !updateInfo.required,
+      builder: (dialogContext) => PopScope(
+        canPop: !updateInfo.required,
+        child: Theme(
+          data: Theme.of(dialogContext).copyWith(
+            dialogBackgroundColor: Theme.of(dialogContext).colorScheme.surface,
+          ),
+          child: AlertDialog(
+            title: Row(
+              children: [
+                const Icon(Icons.system_update),
+                const SizedBox(width: 8),
+                Text(
+                  'Nova Versão ${updateInfo.version}',
+                  style: const TextStyle(fontSize: 20),
+                ),
+              ],
+            ),
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(
+                minWidth: 400,
+                maxWidth: 500,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (updateInfo.required)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: const Text(
+                        'Esta é uma atualização obrigatória!',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  const Text(
+                    'Novidades:',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(dialogContext).colorScheme.surfaceContainerHighest.withAlpha(77),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(updateInfo.changelog),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: updateInfo.required ? null : () => Navigator.pop(dialogContext, false),
+                child: const Text('Depois'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Atualizar Agora'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (!mounted || shouldDownload != true) return;
+
+    // Mostra o diálogo de download
+    showDialog(
+      context: parentContext,
+      barrierDismissible: false,
+      builder: (dialogContext) => PopScope(
+        canPop: !updateInfo.required,
+        child: _DownloadDialog(
+          url: url,
+          required: updateInfo.required,
+        ),
+      ),
+    );
   }
 
   @override
@@ -118,140 +265,6 @@ class _ConfigScreenState extends State<ConfigScreen> {
             const SizedBox(height: 16),
             ...children,
           ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showUpdateDialog(BuildContext context, String url) async {
-    final updateInfo = await UpdateService.instance.checkForUpdates();
-    if (updateInfo == null || !mounted) return;
-
-    // Verifica permissão antes de tudo
-    if (Platform.isAndroid) {
-      final status = await Permission.requestInstallPackages.status;
-      if (!status.isGranted) {
-        if (!mounted) return;
-        
-        // Mostra diálogo explicando a necessidade da permissão
-        final shouldRequest = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Permissão Necessária'),
-            content: const Text(
-              'Para instalar atualizações automaticamente, é necessário permitir a instalação de aplicativos desconhecidos por este app.\n\n'
-              'Na próxima tela, ative a opção "Permitir desta fonte".'
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancelar'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Continuar'),
-              ),
-            ],
-          ),
-        );
-
-        if (!mounted || shouldRequest != true) return;
-
-        final permissionStatus = await Permission.requestInstallPackages.request();
-        if (!mounted || !permissionStatus.isGranted) return;
-      }
-    }
-
-    if (!mounted) return;
-
-    // Mostra diálogo de confirmação
-    final shouldDownload = await showDialog<bool>(
-      context: context,
-      barrierDismissible: !updateInfo.required,
-      builder: (context) => WillPopScope(
-        onWillPop: () async => !updateInfo.required,
-        child: Theme(
-          data: Theme.of(context).copyWith(
-            dialogBackgroundColor: Theme.of(context).colorScheme.surface,
-          ),
-          child: AlertDialog(
-            title: Row(
-              children: [
-                const Icon(Icons.system_update),
-                const SizedBox(width: 8),
-                Text(
-                  'Nova Versão ${updateInfo.version}',
-                  style: const TextStyle(fontSize: 20),
-                ),
-              ],
-            ),
-            content: ConstrainedBox(
-              constraints: const BoxConstraints(
-                minWidth: 400,
-                maxWidth: 500,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (updateInfo.required)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: const Text(
-                        'Esta é uma atualização obrigatória!',
-                        style: TextStyle(
-                          color: Colors.red,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  const Text(
-                    'Novidades:',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(updateInfo.changelog),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: updateInfo.required ? null : () => Navigator.pop(context, false),
-                child: const Text('Depois'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Atualizar Agora'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    if (!mounted || shouldDownload != true) return;
-
-    // Mostra o diálogo de download
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => WillPopScope(
-        onWillPop: () async => !updateInfo.required,
-        child: _DownloadDialog(
-          url: url,
-          required: updateInfo.required,
         ),
       ),
     );

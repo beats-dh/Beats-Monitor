@@ -49,9 +49,9 @@ class ChatMessage {
 
     try {
       return ChatMessage(
-        player: sanitizeString(json['player']) ?? 'System',
-        message: sanitizeString(json['message']) ?? '',
-        channel: sanitizeString(json['channel']) ?? 'chat_global',
+        player: sanitizeString(json['player']),
+        message: sanitizeString(json['message']),
+        channel: sanitizeString(json['channel']),
         timestamp: parseTimestamp(json['timestamp']),
         level: (json['level'] is int) 
             ? json['level'] 
