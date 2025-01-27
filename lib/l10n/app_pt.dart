@@ -73,6 +73,9 @@ class AppPt {
     'error_fetching_status': 'Erro ao buscar status do servidor',
     'server_timeout': 'Tempo limite de conexão excedido. Servidor não está respondendo.',
   
+    // Doação
+    'donation_title': 'Faça uma Doação',
+    'donation_desc': 'Apoie o desenvolvimento do Beats Monitor',
     
     // Server Info Screen
     'state_control': 'Controle de Estado',

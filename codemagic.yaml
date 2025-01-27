@@ -1,0 +1,42 @@
+workflows:
+  ios-workflow:
+    name: iOS Workflow
+    instance_type: mac_mini_m1
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.beats.monitor
+
+    scripts:
+      - name: Set up code signing settings
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
+      
+      - name: Install Flutter dependencies
+        script: |
+          flutter pub get
+          
+      - name: Build iOS
+        script: |
+          flutter build ios --release --no-codesign
+          
+      - name: Build IPA
+        script: |
+          cd ios
+          xcode-project build-ipa \
+            --workspace "Runner.xcworkspace" \
+            --scheme "Runner"
+            
+    artifacts:
+      - build/ios/ipa/*.ipa
+      
+    publishing:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID

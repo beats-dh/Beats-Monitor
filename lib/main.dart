@@ -3,21 +3,31 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
+import 'dart:io' show Platform;
 import 'providers/theme_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/locale_provider.dart';
 import 'services/websocket_service.dart';
 import 'services/auth_service.dart';
 import 'services/config_service.dart';
+import 'services/stripe_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'l10n/app_localizations.dart';
+import 'config/stripe_config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Inicializar Stripe apenas em plataformas móveis
+  if (Platform.isAndroid || Platform.isIOS) {
+    Stripe.publishableKey = StripeConfig.publishableKey;
+  }
+
   // Inicializar serviços
   await AuthService.init();
+  await StripeService.initialize();
   final prefs = await SharedPreferences.getInstance();
   final configService = ConfigService();
   await configService.init();

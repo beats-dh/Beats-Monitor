@@ -42,6 +42,10 @@ android {
         }
     }
 
+    dependencies {
+        implementation 'androidx.appcompat:appcompat:1.6.1'
+    }
+
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
             if (variant.buildType.name == "release") {

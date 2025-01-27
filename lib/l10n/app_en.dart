@@ -9,6 +9,7 @@ class AppEn {
     'config_title': 'Settings',
     'login': 'Login',
     'settings': 'Settings',
+    'donation_title': 'Make a Donation',
     
     // Descriptions
     'monitor_desc': 'Real-time system monitoring',
@@ -18,6 +19,7 @@ class AppEn {
     'config_desc': 'Settings and preferences',
     'login_desc': 'Login to access the system',
     'settings_desc': 'Settings and preferences',
+    'donation_desc': 'Support Beats Monitor development',
     
     // Settings
     'language': 'Language',

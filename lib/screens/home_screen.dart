@@ -9,6 +9,7 @@ import 'config_screen.dart';
 import 'server_info_screen.dart';
 import 'chat_screen.dart';
 import 'server_status_screen.dart';
+import 'donation_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -123,6 +124,16 @@ class HomeScreen extends StatelessWidget {
             () => Navigator.push(
               context,
               PageTransition(child: const ConfigScreen()),
+            ),
+          ),
+          _buildCard(
+            context,
+            'donation_title',
+            Icons.favorite_rounded,
+            Colors.pink,
+            () => Navigator.push(
+              context,
+              PageTransition(child: const DonationScreen()),
             ),
           ),
         ],
