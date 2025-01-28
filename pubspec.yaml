@@ -44,6 +44,9 @@ dependencies:
   web_socket_channel: ^3.0.2  # Para conexão WebSocket
   device_info_plus: ^11.2.1  # Para verificar a versão do Android
   flutter_stripe: ^10.0.0    # Para integração com pagamentos Stripe
+  url_launcher: ^6.2.4      # Para abrir URLs externas
+  qr_flutter: ^4.1.0
+  logger: ^2.0.2+1
 
 dev_dependencies:
   flutter_test:

@@ -44,6 +44,9 @@ android {
 
     dependencies {
         implementation 'androidx.appcompat:appcompat:1.6.1'
+        // Forçar versão específica do androidx.browser para resolver conflitos
+        implementation 'androidx.browser:browser:1.8.0'
+        implementation("com.stripe:stripe-android:21.3.2")
     }
 
     applicationVariants.all { variant ->
