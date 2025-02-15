@@ -184,6 +184,7 @@ class PageFileInfo {
       availableGb: (json['available_gb'] as num).toDouble(),
       totalGb: (json['total_gb'] as num).toDouble(),
     );
+
   }
 }
 

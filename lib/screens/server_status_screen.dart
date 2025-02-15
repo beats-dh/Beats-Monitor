@@ -146,8 +146,9 @@ class _ServerStatusScreenState extends State<ServerStatusScreen> {
     int online,
     int max,
   ) {
-    final percentage = (online / max * 100).round();
-    
+    final percentage = (max == 0) ? 0 : (online / max * 100).round();
+    final playerText = (max == 0) ? '$online' : '$online/$max ($percentage%)';
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -166,7 +167,7 @@ class _ServerStatusScreenState extends State<ServerStatusScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              '$online/$max ($percentage%)',
+              playerText,
               style: theme.textTheme.headlineSmall?.copyWith(
                 color: Colors.green,
                 fontWeight: FontWeight.bold,
@@ -174,7 +175,7 @@ class _ServerStatusScreenState extends State<ServerStatusScreen> {
             ),
             const SizedBox(height: 8),
             LinearProgressIndicator(
-              value: online / max,
+              value: (max == 0) ? 0 : online / max,
               backgroundColor: Colors.grey[200],
               valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
             ),

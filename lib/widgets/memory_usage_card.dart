@@ -13,7 +13,7 @@ class MemoryUsageCard extends StatelessWidget {
         .replaceAllMapped(RegExp(r'^[a-z]'), (match) => match.group(0)!.toUpperCase());
   }
 
-  Widget _buildMemoryIndicator(String label, double usedGb, double totalGb, Color color, String name) {
+  Widget _buildMemoryIndicator(String label, num usedGb, num totalGb, Color color, String name) {
     final percentage = (usedGb / totalGb) * 100;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -72,8 +72,14 @@ class MemoryUsageCard extends StatelessWidget {
         final data = snapshot.data!;
         final process = data.processData;
         final systemMemory = data.systemInfo.memory;
+
         final totalGb = systemMemory.performance.commit.totalGb;
-        final usedGb = totalGb - systemMemory.availableGb;
+        final processUsedGb = _mbToGb(process.memory.privateUsageMb);
+        final systemUsedGb = totalGb - processUsedGb;
+
+        // Garantir que os valores não sejam negativos
+        final adjustedSystemUsedGb = systemUsedGb >= 0 ? systemUsedGb : 0;
+        final adjustedTotalGb = totalGb >= 0 ? totalGb : 0;
 
         return Card(
           child: Padding(
@@ -91,17 +97,17 @@ class MemoryUsageCard extends StatelessWidget {
                 const SizedBox(height: 16),
                 _buildMemoryIndicator(
                   'Processo',
-                  _mbToGb(process.memory.privateUsageMb),
-                  totalGb,
-                  const Color.fromARGB(255, 156, 39, 176), // Purple
+                  processUsedGb,
+                  adjustedTotalGb,
+                  const Color.fromARGB(255, 156, 39, 176), // Roxo
                   _formatProcessName(process.processName),
                 ),
                 const SizedBox(height: 16),
                 _buildMemoryIndicator(
                   'Sistema',
-                  usedGb,
-                  totalGb,
-                  const Color.fromARGB(255, 186, 104, 200), // Light Purple
+                  adjustedSystemUsedGb,
+                  adjustedTotalGb,
+                  const Color.fromARGB(255, 186, 104, 200), // Roxo claro
                   'Memória Total',
                 ),
               ],
