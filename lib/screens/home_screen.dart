@@ -9,6 +9,8 @@ import 'config_screen.dart';
 import 'server_info_screen.dart';
 import 'chat_screen.dart';
 import 'server_status_screen.dart';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -69,63 +71,74 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: GridView.count(
-        padding: const EdgeInsets.all(24),
-        crossAxisCount: 2,
-        mainAxisSpacing: 24,
-        crossAxisSpacing: 24,
-        children: [
-          _buildCard(
-            context,
-            'monitor_title',
-            Icons.monitor_heart_rounded,
-            Colors.red,
-            () => Navigator.push(
-              context,
-              PageTransition(child: const MonitorScreen()),
-            ),
-          ),
-          _buildCard(
-            context,
-            'server_info_title',
-            Icons.computer_rounded,
-            Colors.blue,
-            () => Navigator.push(
-              context,
-              PageTransition(child: const ServerInfoScreen()),
-            ),
-          ),
-          _buildCard(
-            context,
-            'server_status_title',
-            Icons.dns_rounded,
-            Colors.green,
-            () => Navigator.push(
-              context,
-              PageTransition(child: const ServerStatusScreen()),
-            ),
-          ),
-          _buildCard(
-            context,
-            'chat_title',
-            Icons.chat_rounded,
-            Colors.orange,
-            () => Navigator.push(
-              context,
-              PageTransition(child: const ChatScreen()),
-            ),
-          ),
-          _buildCard(
-            context,
-            'config_title',
-            Icons.settings_rounded,
-            Colors.purple,
-            () => Navigator.push(
-              context,
-              PageTransition(child: const ConfigScreen()),
-            ),
-          ),
-        ],
+      body: GridView.builder(
+        padding: EdgeInsets.all(kIsWeb || Platform.isWindows ? 12 : 24),
+        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: kIsWeb || Platform.isWindows ? 600 : 600,
+          mainAxisSpacing: kIsWeb || Platform.isWindows ? 12 : 24,
+          crossAxisSpacing: kIsWeb || Platform.isWindows ? 12 : 24,
+          childAspectRatio: kIsWeb || Platform.isWindows ? 1.2 : 1.0,
+        ),
+        itemCount: 5,
+        itemBuilder: (context, index) {
+          switch (index) {
+            case 0:
+              return _buildCard(
+                context,
+                'monitor_title',
+                Icons.monitor_heart_rounded,
+                Colors.red,
+                () => Navigator.push(
+                  context,
+                  PageTransition(child: const MonitorScreen()),
+                ),
+              );
+            case 1:
+              return _buildCard(
+                context,
+                'server_info_title',
+                Icons.computer_rounded,
+                Colors.blue,
+                () => Navigator.push(
+                  context,
+                  PageTransition(child: const ServerInfoScreen()),
+                ),
+              );
+            case 2:
+              return _buildCard(
+                context,
+                'server_status_title',
+                Icons.dns_rounded,
+                Colors.green,
+                () => Navigator.push(
+                  context,
+                  PageTransition(child: const ServerStatusScreen()),
+                ),
+              );
+            case 3:
+              return _buildCard(
+                context,
+                'chat_title',
+                Icons.chat_rounded,
+                Colors.orange,
+                () => Navigator.push(
+                  context,
+                  PageTransition(child: const ChatScreen()),
+                ),
+              );
+            default:
+              return _buildCard(
+                context,
+                'config_title',
+                Icons.settings_rounded,
+                Colors.purple,
+                () => Navigator.push(
+                  context,
+                  PageTransition(child: const ConfigScreen()),
+                ),
+              );
+          }
+        },
       ),
     );
   }
@@ -152,38 +165,38 @@ class HomeScreen extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: EdgeInsets.all(kIsWeb || Platform.isWindows ? 4 : 12),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: EdgeInsets.all(kIsWeb || Platform.isWindows ? 4 : 12),
                 decoration: BoxDecoration(
                   color: color.withAlpha(26), // 0.1 * 255 ≈ 26
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(kIsWeb || Platform.isWindows ? 8 : 12),
                 ),
                 child: Icon(
                   icon,
-                  size: 32,
+                  size: kIsWeb || Platform.isWindows ? 20 : 32,
                   color: color,
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: kIsWeb || Platform.isWindows ? 6 : 12),
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 14,
+                style: TextStyle(
+                  fontSize: kIsWeb || Platform.isWindows ? 12 : 14,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: kIsWeb || Platform.isWindows ? 2 : 4),
               Text(
                 description,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: kIsWeb || Platform.isWindows ? 10 : 12,
                   color: Theme.of(context).textTheme.bodySmall?.color,
                 ),
               ),
