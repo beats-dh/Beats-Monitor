@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/system_data.dart';
 import '../services/websocket_service.dart';
+import '../l10n/app_localizations.dart';
 
 class MemoryUsageCard extends StatelessWidget {
   const MemoryUsageCard({super.key});
@@ -13,8 +14,8 @@ class MemoryUsageCard extends StatelessWidget {
         .replaceAllMapped(RegExp(r'^[a-z]'), (match) => match.group(0)!.toUpperCase());
   }
 
-  Widget _buildMemoryIndicator(String label, num usedGb, num totalGb, Color color, String name) {
-    final percentage = (usedGb / totalGb) * 100;
+  Widget _buildMemoryIndicator(String label, num usedGb, num totalGb, num percentagen, Color color, String name) {
+    final percentage = percentagen;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -73,9 +74,9 @@ class MemoryUsageCard extends StatelessWidget {
         final process = data.processData;
         final systemMemory = data.systemInfo.memory;
 
-        final totalGb = systemMemory.performance.commit.totalGb;
+        final totalGb = systemMemory.totalGb;
         final processUsedGb = _mbToGb(process.memory.privateUsageMb);
-        final systemUsedGb = totalGb - processUsedGb;
+        final systemUsedGb = totalGb - systemMemory.availableGb;
 
         // Garantir que os valores não sejam negativos
         final adjustedSystemUsedGb = systemUsedGb >= 0 ? systemUsedGb : 0;
@@ -87,28 +88,30 @@ class MemoryUsageCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Uso de Memória',
-                  style: TextStyle(
+                Text(
+                  AppLocalizations.of(context).translate('memory_usage'),
+                  style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 16),
                 _buildMemoryIndicator(
-                  'Processo',
+                  AppLocalizations.of(context).translate('process_name'),
                   processUsedGb,
                   adjustedTotalGb,
+                  processUsedGb / adjustedTotalGb * 100,
                   const Color.fromARGB(255, 156, 39, 176), // Roxo
                   _formatProcessName(process.processName),
                 ),
                 const SizedBox(height: 16),
                 _buildMemoryIndicator(
-                  'Sistema',
+                  AppLocalizations.of(context).translate('system_info'),
                   adjustedSystemUsedGb,
                   adjustedTotalGb,
+                  systemMemory.usagePercent,
                   const Color.fromARGB(255, 186, 104, 200), // Roxo claro
-                  'Memória Total',
+                  AppLocalizations.of(context).translate('memory'),
                 ),
               ],
             ),

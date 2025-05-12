@@ -23,6 +23,9 @@ void main() async {
   await configService.init();
   
   final webSocketService = WebSocketService(configService);
+  // Inicializa a conexão WebSocket uma única vez para todo o aplicativo
+  webSocketService.manualReconnectMode = false;
+  webSocketService.startConnection();
   final themeProvider = ThemeProvider();
   final authProvider = AuthProvider();
   final localeProvider = LocaleProvider(prefs);

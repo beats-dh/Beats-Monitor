@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/system_data.dart';
 import '../services/websocket_service.dart';
+import '../l10n/app_localizations.dart';
 
 class ProcessorCard extends StatelessWidget {
   const ProcessorCard({super.key});
@@ -30,19 +31,19 @@ class ProcessorCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Informações do Processo',
-                  style: TextStyle(
+                Text(
+                  AppLocalizations.of(context).translate('processor_info'),
+                  style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 16),
-                _buildProcessInfo(processData),
+                _buildProcessInfo(context, processData),
                 const Divider(),
-                _buildCpuInfo(processData),
+                _buildCpuInfo(context, processData),
                 const Divider(),
-                _buildMemoryInfo(processData),
+                _buildMemoryInfo(context, processData),
               ],
             ),
           ),
@@ -51,51 +52,51 @@ class ProcessorCard extends StatelessWidget {
     );
   }
 
-  Widget _buildProcessInfo(ProcessData processData) {
+  Widget _buildProcessInfo(BuildContext context, ProcessData processData) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildInfoRow('Nome', processData.processName),
+        _buildInfoRow(AppLocalizations.of(context).translate('process_name'), processData.processName),
       ],
     );
   }
 
-  Widget _buildCpuInfo(ProcessData processData) {
+  Widget _buildCpuInfo(BuildContext context, ProcessData processData) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'CPU',
-          style: TextStyle(
+        Text(
+          AppLocalizations.of(context).translate('cpu'),
+          style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: 8),
-        _buildInfoRow('Uso', '${processData.cpu.usagePercent.toStringAsFixed(1)}%'),
-        _buildInfoRow('Tempo em Kernel', '${processData.cpu.kernelTimePercent.toStringAsFixed(1)}%'),
-        _buildInfoRow('Tempo em User', '${processData.cpu.userTimePercent.toStringAsFixed(1)}%'),
+        _buildInfoRow(AppLocalizations.of(context).translate('usage'), '${processData.cpu.usagePercent.toStringAsFixed(1)}%'),
+        _buildInfoRow(AppLocalizations.of(context).translate('kernel_time'), '${processData.cpu.kernelTimePercent.toStringAsFixed(1)}%'),
+        _buildInfoRow(AppLocalizations.of(context).translate('user_time'), '${processData.cpu.userTimePercent.toStringAsFixed(1)}%'),
       ],
     );
   }
 
-  Widget _buildMemoryInfo(ProcessData processData) {
+  Widget _buildMemoryInfo(BuildContext context, ProcessData processData) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Memória',
-          style: TextStyle(
+        Text(
+          AppLocalizations.of(context).translate('memory'),
+          style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: 8),
-        _buildInfoRow('Uso Privado', '${processData.memory.privateUsageMb.toStringAsFixed(1)} MB'),
-        _buildInfoRow('Working Set', '${processData.memory.workingSetMb.toStringAsFixed(1)} MB'),
-        _buildInfoRow('Page Faults', processData.memory.pageFaultCount.toStringAsFixed(0)),
-        _buildInfoRow('Peak Working Set', '${processData.memory.peakWorkingSetMb.toStringAsFixed(1)} MB'),
-        _buildInfoRow('Quota Paged Pool', '${processData.memory.quotaPagedPoolMb.toStringAsFixed(1)} MB'),
+        _buildInfoRow(AppLocalizations.of(context).translate('private_usage'), '${processData.memory.privateUsageMb.toStringAsFixed(1)} MB'),
+        _buildInfoRow(AppLocalizations.of(context).translate('working_set'), '${processData.memory.workingSetMb.toStringAsFixed(1)} MB'),
+        _buildInfoRow(AppLocalizations.of(context).translate('page_faults'), processData.memory.pageFaultCount.toStringAsFixed(0)),
+        _buildInfoRow(AppLocalizations.of(context).translate('peak_working_set'), '${processData.memory.peakWorkingSetMb.toStringAsFixed(1)} MB'),
+        _buildInfoRow(AppLocalizations.of(context).translate('quota_paged_pool'), '${processData.memory.quotaPagedPoolMb.toStringAsFixed(1)} MB'),
       ],
     );
   }

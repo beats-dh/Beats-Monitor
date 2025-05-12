@@ -3,8 +3,12 @@ import 'package:provider/provider.dart';
 import 'dart:convert';
 import '../services/api_service.dart';
 import '../models/server_status.dart';
+import '../models/events.dart' as events;
+import '../services/websocket_service.dart';
 import '../providers/theme_provider.dart';
 import '../l10n/app_localizations.dart';
+import 'dart:async';
+import '../widgets/connection_status_popup.dart';
 
 class ServerInfoScreen extends StatefulWidget {
   const ServerInfoScreen({super.key});
@@ -13,11 +17,16 @@ class ServerInfoScreen extends StatefulWidget {
   State<ServerInfoScreen> createState() => _ServerInfoScreenState();
 }
 
-class _ServerInfoScreenState extends State<ServerInfoScreen> {
+class _ServerInfoScreenState extends State<ServerInfoScreen> with WidgetsBindingObserver {
   ServerStatus? _serverStatus;
   bool _isLoading = false;
-  bool _isChangingState = false; // Novo estado para controlar mudança de estado
+  bool _isChangingState = false;
   String? _error;
+  late WebSocketService _webSocketService;
+  bool _webSocketInitialized = false;
+  events.ServerStatus? _liveServerStatus;
+  bool _isConnected = false;
+  StreamSubscription<bool>? _connectionSubscription;
 
   Future<void> _fetchServerStatus() async {
     if (_serverStatus == null) {
@@ -234,6 +243,24 @@ class _ServerInfoScreenState extends State<ServerInfoScreen> {
     }
   }
 
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'online':
+        return Colors.green;
+      case 'offline':
+      case 'fechado':
+        return Colors.red;
+      case 'maintenance':
+      case 'manutenção':
+        return Colors.blue;
+      case 'shutting_down':
+      case 'desligando':
+        return Colors.orange;
+      default:
+        return Colors.grey;
+    }
+  }
+
   Future<bool> _showShutdownConfirmation() async {
     final l10n = AppLocalizations.of(context);
     return await showDialog<bool>(
@@ -374,47 +401,162 @@ class _ServerInfoScreenState extends State<ServerInfoScreen> {
     );
   }
 
+  void _ensureConnection() {
+    if (!_webSocketService.connectionStatus) {
+      // Se não estiver conectado, tenta iniciar a conexão
+      _webSocketService.startConnection();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    
     _fetchServerStatus();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_webSocketInitialized) {
+        _webSocketService = context.read<WebSocketService>();
+        
+        // Inicializa o estado de conexão com o valor atual
+        setState(() {
+          _isConnected = _webSocketService.connectionStatus;
+        });
+        
+        // Monitora o status da conexão
+        _connectionSubscription = _webSocketService.connectionStatusStream.listen((isConnected) {
+          if (mounted) {
+            setState(() {
+              _isConnected = isConnected;
+            });
+          }
+        });
+        
+        // Garante que temos uma conexão WebSocket
+        _ensureConnection();
+        
+        _webSocketService.subscribe(['server_status']);
+        _webSocketInitialized = true;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _connectionSubscription?.cancel();
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _webSocketService.unsubscribe(['server_status']);
+    });
+    super.dispose();
+  }
+  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    // Se o aplicativo voltar ao primeiro plano, verifica a conexão
+    if (state == AppLifecycleState.resumed) {
+      _ensureConnection();
+      _fetchServerStatus();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDarkMode = context.watch<ThemeProvider>().isDarkMode;
     final l10n = AppLocalizations.of(context);
+    final websocketService = context.watch<WebSocketService>();
     
     return PopScope(
       canPop: !(_isLoading || _isChangingState),
       child: Scaffold(
         appBar: AppBar(
-          title: Text(l10n.translate('server_info_title')),
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.dns_rounded),
+              SizedBox(width: 12),
+              Flexible(
+                child: Text(
+                  l10n.translate('server_info_title'),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+            ],
+          ),
           centerTitle: true,
           actions: [
-            Stack(
-              alignment: Alignment.center,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: _isLoading ? null : _fetchServerStatus,
-                ),
-                if (_isLoading)
-                  SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        isDarkMode ? Colors.white70 : Colors.grey
-                      ),
-                    ),
+            if (_isChangingState)
+              const Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.0,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
-              ],
+                ),
+              )
+            else
+              IconButton(
+                icon: Icon(Icons.refresh),
+                onPressed: _isLoading ? null : _fetchServerStatus,
+                tooltip: l10n.translate('refresh'),
+              ),
+            IconButton(
+              icon: Icon(_isConnected ? Icons.wifi : Icons.wifi_off),
+              onPressed: () {
+                if (!_isConnected) {
+                  _webSocketService.reconnectManually();
+                  
+                  // Força atualização do estado após um breve delay
+                  Future.delayed(const Duration(milliseconds: 500), () {
+                    if (mounted) {
+                      setState(() {
+                        _isConnected = _webSocketService.connectionStatus;
+                      });
+                      _fetchServerStatus();
+                    }
+                  });
+                } else {
+                  // Mostra status da conexão
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(l10n.translate('server_info_connection_status')),
+                      backgroundColor: Colors.green,
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+              tooltip: _isConnected ? l10n.translate('server_info_connected_tooltip') : l10n.translate('server_info_reconnect_tooltip'),
             ),
           ],
         ),
-        body: _buildBody(),
+        body: Stack(
+          children: [
+            StreamBuilder<events.ServerStatus>(
+              stream: websocketService.serverStatusStream,
+              builder: (context, snapshot) {
+                // Se temos dados do WebSocket, atualiza o status em tempo real
+                if (snapshot.hasData) {
+                  _liveServerStatus = snapshot.data!;
+                }
+                return _buildBody();
+              },
+            ),
+            // Adiciona o componente de status da conexão
+            Consumer<WebSocketService>(
+              builder: (context, webSocketService, _) {
+                return ConnectionStatusPopup(webSocketService: webSocketService);
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -458,66 +600,148 @@ class _ServerInfoScreenState extends State<ServerInfoScreen> {
 
   Widget _buildStatusCard() {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    
+    // Combine dados do HTTP e WebSocket, dando preferência aos do WebSocket (em tempo real)
+    final String status = _liveServerStatus?.status ?? _serverStatus!.status;
+    final int playersOnline = _liveServerStatus?.playersOnline ?? _serverStatus!.playersOnline;
+    final int maxPlayers = _liveServerStatus?.maxPlayers ?? _serverStatus!.maxPlayers;
+    final int uptime = _liveServerStatus?.uptime ?? _serverStatus!.uptime;
+    
     Color statusColor;
-    switch (_serverStatus!.status.toLowerCase()) {
+    String translatedStatus;
+    switch (status.toLowerCase()) {
       case 'online':
         statusColor = Colors.green;
+        translatedStatus = l10n.translate('state_online');
         break;
       case 'fechado':
-        statusColor = Colors.red;
+      case 'offline':
+        statusColor = Colors.orange;
+        translatedStatus = l10n.translate('state_offline');
         break;
       case 'desligando':
-        statusColor = Colors.orange;
+      case 'shutting_down':
+        statusColor = Colors.red;
+        translatedStatus = l10n.translate('state_shutting_down');
         break;
       case 'manutenção':
+      case 'maintenance':
         statusColor = Colors.blue;
+        translatedStatus = l10n.translate('state_maintenance');
         break;
       default:
         statusColor = Colors.grey;
+        translatedStatus = status.toUpperCase();
     }
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+    final uptimeHours = (uptime / 3600).floor();
+    final uptimeMinutes = ((uptime % 3600) / 60).floor();
+    final uptimeSeconds = uptime % 60;
+    final uptimeText = l10n.translate('state_uptime')
+        .replaceAll('{0}', uptimeHours.toString())
+        .replaceAll('{1}', uptimeMinutes.toString())
+        .replaceAll('{2}', uptimeSeconds.toString());
+
+    return Column(
+      children: [
+        // Status do servidor
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
               children: [
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: statusColor,
-                    shape: BoxShape.circle,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: statusColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      translatedStatus,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: statusColor,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  _serverStatus!.status.toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: statusColor,
-                  ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.timer_rounded, color: Colors.blue),
+                    const SizedBox(width: 8),
+                    Text(
+                      uptimeText,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              '${_serverStatus!.playersOnline} / ${_serverStatus!.maxPlayers}',
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Text(
-              l10n.translate('players_online'),
-              style: const TextStyle(color: Colors.grey),
-            ),
-          ],
+          ),
         ),
-      ),
+        
+        const SizedBox(height: 16),
+        
+        // Card de jogadores
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.people_rounded, color: Colors.green),
+                    const SizedBox(width: 8),
+                    Text(
+                      l10n.translate('players'),
+                      style: theme.textTheme.titleMedium,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Center(
+                  child: Text(
+                    l10n.translate('state_players')
+                        .replaceAll('{0}', playersOnline.toString())
+                        .replaceAll('{1}', maxPlayers.toString()),
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                ),
+                Text(
+                  l10n.translate('players_online'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
+                LinearProgressIndicator(
+                  value: (maxPlayers == 0) ? 0 : playersOnline / maxPlayers,
+                  backgroundColor: Colors.grey[200],
+                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -571,7 +795,7 @@ class _ServerInfoScreenState extends State<ServerInfoScreen> {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _buildStateButton('offline', Colors.red),
+                  child: _buildStateButton('offline', Colors.orange),
                 ),
               ],
             ),
@@ -579,7 +803,7 @@ class _ServerInfoScreenState extends State<ServerInfoScreen> {
             Row(
               children: [
                 Expanded(
-                  child: _buildStateButton('shutting_down', Colors.orange),
+                  child: _buildStateButton('shutting_down', Colors.red),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -595,7 +819,10 @@ class _ServerInfoScreenState extends State<ServerInfoScreen> {
 
   Widget _buildStateButton(String state, Color color) {
     final l10n = AppLocalizations.of(context);
-    final buttonText = l10n.translate(state);
+    final buttonKey = 'state_button_$state';
+    final buttonText = l10n.translate(buttonKey);
+    final stateKey = 'state_$state';
+    final stateText = l10n.translate(stateKey);
     
     String normalizeString(String str) {
       String fixEncoding(String input) {
@@ -628,7 +855,7 @@ class _ServerInfoScreenState extends State<ServerInfoScreen> {
 
     final currentStatus = _serverStatus?.status ?? '';
     final normalizedCurrent = normalizeString(currentStatus);
-    final normalizedState = normalizeString(buttonText);
+    final normalizedState = normalizeString(stateText);
     final isCurrentState = normalizedCurrent == normalizedState;
     final isDarkMode = context.watch<ThemeProvider>().isDarkMode;
     
@@ -672,7 +899,7 @@ class _ServerInfoScreenState extends State<ServerInfoScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    state.toUpperCase(),
+                    buttonText,
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: isCurrentState ? FontWeight.bold : FontWeight.normal,
@@ -681,13 +908,13 @@ class _ServerInfoScreenState extends State<ServerInfoScreen> {
                 ],
               )
             : Text(
-                state.toUpperCase(),
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: isCurrentState ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
+                buttonText,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: isCurrentState ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
       ),
     );
   }

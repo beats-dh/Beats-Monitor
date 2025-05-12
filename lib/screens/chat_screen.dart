@@ -1,9 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/events.dart';
 import '../services/websocket_service.dart';
 import '../l10n/app_localizations.dart';
+import '../widgets/connection_status_popup.dart';
+import '../services/api_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -16,6 +22,7 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
   final ScrollController _scrollController = ScrollController();
   String _selectedChannel = 'global';
   StreamSubscription<ChatMessage>? _subscription;
+  StreamSubscription<bool>? _connectionSubscription;
   late WebSocketService _webSocketService;
   bool _initialized = false;
   final Set<String> _messageKeys = {};
@@ -23,6 +30,25 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
   bool _historyReceived = false;
   final TextEditingController _messageController = TextEditingController();
   bool _isSending = false;
+  bool _requestedHistory = false;
+  bool _isConnected = false;
+  List<Map<String, dynamic>> _broadcastHistory = [];
+
+  // Verifica se está no Windows
+  bool get _isWindows => !kIsWeb && Platform.isWindows;
+  
+  // Ajusta tamanhos para Windows
+  double _getAdaptiveFontSize(double mobileSize) {
+    return _isWindows ? mobileSize * 0.7 : mobileSize;
+  }
+  
+  double _getAdaptiveIconSize(double mobileSize) {
+    return _isWindows ? mobileSize * 0.7 : mobileSize;
+  }
+  
+  double _getAdaptivePadding(double mobilePadding) {
+    return _isWindows ? mobilePadding * 0.7 : mobilePadding;
+  }
 
   Color get _channelColor {
     switch (_selectedChannel) {
@@ -38,7 +64,8 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
   }
 
   String _getMessageKey(ChatMessage message) {
-    return '${message.channel}_${message.player}_${message.timestamp.millisecondsSinceEpoch}_${message.message}';
+    // Chave mais robusta para evitar duplicações
+    return '${message.channel}_${message.player}_${message.timestamp.millisecondsSinceEpoch}_${message.message.hashCode}';
   }
 
   void _addMessage(ChatMessage message) {
@@ -49,6 +76,9 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
         // Ordena as mensagens por timestamp
         _messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
       });
+    } else {
+      // A mensagem já existe, não fazemos nada
+      debugPrint('[ChatScreen] Mensagem duplicada ignorada: $key');
     }
   }
 
@@ -80,58 +110,111 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
   void _setupMessageSubscription() {
     _subscription = _webSocketService.chatMessageStream.listen((message) {
       if (mounted) {
+        // Se recebemos uma mensagem, devemos estar conectados
+        if (!_isConnected) {
+          setState(() {
+            _isConnected = true;
+          });
+        }
+        
         final wasNearBottom = _isNearBottom();
         
-        // Se for uma mensagem do histórico
-        if (message.timestamp.isBefore(DateTime.now().subtract(const Duration(seconds: 5)))) {
-          _addMessage(message);
+        // Se for uma mensagem do histórico ou nova, adiciona
+        _addMessage(message);
           
-          // Agenda um único scroll após receber todo o histórico
-          if (!_historyReceived) {
-            Future.delayed(const Duration(milliseconds: 300), () {
-              if (mounted) {
-                setState(() {
-                  _historyReceived = true;
-                });
-                _scrollToBottom();
-              }
-            });
+        // Se for uma mensagem do canal atual
+        if (message.channel.replaceAll('chat_', '') == _selectedChannel) {
+          // Se estava próximo do final, faz o scroll
+          if (wasNearBottom || !_historyReceived) {
+            _scrollToBottom();
           }
-        } else {
-          // Se for uma mensagem nova
-          _addMessage(message);
-          
-          // Verifica se a mensagem é do canal atual
-          if (message.channel.replaceAll('chat_', '') == _selectedChannel) {
-            // Se estava próximo do final, faz o scroll
-            if (wasNearBottom) {
-              _scrollToBottom();
+        }
+        
+        // Marca que o histórico foi recebido após um pequeno delay
+        if (!_historyReceived) {
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (mounted) {
+              setState(() {
+                _historyReceived = true;
+              });
             }
-          }
+          });
         }
       }
     });
+
+    // Monitora o status da conexão
+    _connectionSubscription = _webSocketService.connectionStatusStream.listen((isConnected) {
+      if (mounted) {
+        setState(() {
+          _isConnected = isConnected;
+        });
+      }
+    });
+  }
+
+  void _ensureConnection() {
+    if (!_webSocketService.connectionStatus) {
+      // Se não estiver conectado, tenta iniciar a conexão
+      _webSocketService.startConnection();
+    }
+  }
+
+  void _requestChatHistory() {
+    _ensureConnection();
+    
+    if (_webSocketService.connectionStatus) {
+      // Solicita histórico para todos os canais
+      _webSocketService.sendMessage({
+        'type': 'chat_history',
+        'channels': ['chat_global', 'chat_trade', 'chat_help'] // Especifica todos os canais para garantir que receba todo o histórico
+      });
+      _requestedHistory = true;
+    } else {
+      // Se não conseguir enviar, mostra uma mensagem
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context).translate('reconnecting_to_server')),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   Future<void> _sendMessage(String text) async {
     if (text.trim().isEmpty || _isSending) return;
 
+    if (_selectedChannel == 'broadcast') {
+      try {
+        setState(() => _isSending = true);
+        final response = await ApiService.post('server/broadcast', body: {"message": text.trim()});
+        if (response.statusCode == 200) {
+          await _addBroadcastToHistory(text.trim());
+          _messageController.clear();
+        }
+      } catch (e) {
+        // Se erro, não faz nada e mantém o texto
+      } finally {
+        if (mounted) {
+          setState(() => _isSending = false);
+        }
+      }
+      return;
+    }
+
+    // Comportamento padrão para outros canais
     try {
       setState(() => _isSending = true);
-
-      // Envia a mensagem usando o canal selecionado atual
+      _ensureConnection();
       _webSocketService.sendMessage({
         'type': 'chat_message',
         'data': {
           'message': text.trim(),
-          'channel': 'chat_$_selectedChannel' // Usa o canal selecionado
+          'channel': 'chat_$_selectedChannel'
         }
       });
-
-      // Limpa o campo de texto
       _messageController.clear();
-      
-      // Rola para o final da lista
       if (_scrollController.hasClients) {
         await _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
@@ -140,7 +223,6 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
         );
       }
     } catch (e) {
-      // Mostra erro para o usuário
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -168,23 +250,30 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_initialized) {
         _webSocketService = context.read<WebSocketService>();
-        _webSocketService.manualReconnectMode = false;
         
-        // Inscreve-se no stream de status da conexão
-        _webSocketService.connectionStatusStream.listen((isConnected) {
-          if (isConnected) {
-            // Solicita o histórico do chat apenas quando conectado
-            _webSocketService.sendMessage({
-              'type': 'chat_history',
-              'channel': 'chat_$_selectedChannel'
+        // Inicializa o estado de conexão com o valor atual
+        setState(() {
+          _isConnected = _webSocketService.connectionStatus;
+        });
+        
+        // Monitora o status da conexão
+        _connectionSubscription = _webSocketService.connectionStatusStream.listen((isConnected) {
+          if (mounted) {
+            setState(() {
+              _isConnected = isConnected;
             });
+
+            // Se a conexão foi estabelecida, solicita o histórico
+            if (isConnected && !_requestedHistory) {
+              _requestChatHistory();
+            }
           }
         });
-
-        // Inicia a conexão
-        _webSocketService.startConnection();
         
-        // Se inscreve nos canais de chat
+        // Garante que temos uma conexão WebSocket
+        _ensureConnection();
+        
+        // Apenas se inscreve nos canais de chat, sem iniciar nova conexão
         _webSocketService.subscribe([
           'chat_global',
           'chat_trade',
@@ -194,8 +283,15 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
         
         _setupMessageSubscription();
         _initialized = true;
+        
+        // Solicita o histórico imediatamente se estiver conectado
+        if (_webSocketService.connectionStatus && !_requestedHistory) {
+          _requestChatHistory();
+        }
       }
     });
+
+    _loadBroadcastHistory();
   }
 
   @override
@@ -204,20 +300,18 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
     _subscription?.cancel();
+    _connectionSubscription?.cancel();
     _scrollController.dispose();
 
     // Remove inscrição dos canais e fecha conexão
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_webSocketService.manualReconnectMode) {
-        _webSocketService.unsubscribe([
-          'chat_global',
-          'chat_trade',
-          'chat_help',
-          'chat_history'
-        ]);
-        _webSocketService.closeCurrentConnection();
-      }
-      _webSocketService.manualReconnectMode = true;
+      // Apenas cancela a inscrição dos eventos, sem fechar a conexão
+      _webSocketService.unsubscribe([
+        'chat_global',
+        'chat_trade',
+        'chat_help',
+        'chat_history'
+      ]);
     });
 
     // Limpa as mensagens
@@ -247,6 +341,21 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     }
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    // Se o aplicativo voltar ao primeiro plano, verifica a conexão
+    if (state == AppLifecycleState.resumed) {
+      _ensureConnection();
+      
+      // Não solicitar histórico ao retornar para primeiro plano,
+      // pois isso pode duplicar mensagens
+      // Vamos apenas garantir a conexão e deixar o stream de mensagens
+      // funcionar normalmente
+    }
+  }
+
   String _formatChatTime(DateTime timestamp) {
     return '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
   }
@@ -270,72 +379,122 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
 
   Widget _buildChannelSelector() {
     final l10n = AppLocalizations.of(context);
+    final buttonPadding = EdgeInsets.symmetric(
+      horizontal: _getAdaptivePadding(_isWindows ? 8 : 12), 
+      vertical: _getAdaptivePadding(6)
+    );
+    final buttonFontSize = _getAdaptiveFontSize(_isWindows ? 12 : 13);
+    final containerPadding = EdgeInsets.symmetric(
+      vertical: _getAdaptivePadding(6),
+      horizontal: _getAdaptivePadding(4)
+    );
+    
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          TextButton(
-            onPressed: () => _selectChannel('global'),
-            style: TextButton.styleFrom(
-              backgroundColor: _selectedChannel == 'global' ? _channelColor.withAlpha(25) : null,
-              foregroundColor: _selectedChannel == 'global' ? _channelColor : null,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(
-                  color: _selectedChannel == 'global' ? _channelColor : Colors.transparent,
+      padding: containerPadding,
+      width: double.infinity,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            const SizedBox(width: 4),
+            TextButton(
+              onPressed: () => _selectChannel('global'),
+              style: TextButton.styleFrom(
+                backgroundColor: _selectedChannel == 'global' ? _channelColor.withAlpha(25) : null,
+                foregroundColor: _selectedChannel == 'global' ? _channelColor : null,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(_getAdaptivePadding(20)),
+                  side: BorderSide(
+                    color: _selectedChannel == 'global' ? _channelColor : Colors.transparent,
+                  ),
                 ),
+                padding: buttonPadding,
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                l10n.translate('global_chat'),
+                style: TextStyle(fontSize: buttonFontSize),
+              ),
             ),
-            child: Text(l10n.translate('global_chat')),
-          ),
-          TextButton(
-            onPressed: () => _selectChannel('trade'),
-            style: TextButton.styleFrom(
-              backgroundColor: _selectedChannel == 'trade' ? _channelColor.withAlpha(25) : null,
-              foregroundColor: _selectedChannel == 'trade' ? _channelColor : null,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(
-                  color: _selectedChannel == 'trade' ? _channelColor : Colors.transparent,
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: () => _selectChannel('trade'),
+              style: TextButton.styleFrom(
+                backgroundColor: _selectedChannel == 'trade' ? _channelColor.withAlpha(25) : null,
+                foregroundColor: _selectedChannel == 'trade' ? _channelColor : null,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(_getAdaptivePadding(20)),
+                  side: BorderSide(
+                    color: _selectedChannel == 'trade' ? _channelColor : Colors.transparent,
+                  ),
                 ),
+                padding: buttonPadding,
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                l10n.translate('trade_chat'),
+                style: TextStyle(fontSize: buttonFontSize),
+              ),
             ),
-            child: Text(l10n.translate('trade_chat')),
-          ),
-          TextButton(
-            onPressed: () => _selectChannel('help'),
-            style: TextButton.styleFrom(
-              backgroundColor: _selectedChannel == 'help' ? _channelColor.withAlpha(25) : null,
-              foregroundColor: _selectedChannel == 'help' ? _channelColor : null,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(
-                  color: _selectedChannel == 'help' ? _channelColor : Colors.transparent,
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: () => _selectChannel('help'),
+              style: TextButton.styleFrom(
+                backgroundColor: _selectedChannel == 'help' ? _channelColor.withAlpha(25) : null,
+                foregroundColor: _selectedChannel == 'help' ? _channelColor : null,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(_getAdaptivePadding(20)),
+                  side: BorderSide(
+                    color: _selectedChannel == 'help' ? _channelColor : Colors.transparent,
+                  ),
                 ),
+                padding: buttonPadding,
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                l10n.translate('help_chat'),
+                style: TextStyle(fontSize: buttonFontSize),
+              ),
             ),
-            child: Text(l10n.translate('help_chat')),
-          ),
-        ],
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: () => _selectChannel('broadcast'),
+              style: TextButton.styleFrom(
+                backgroundColor: _selectedChannel == 'broadcast' ? _channelColor.withAlpha(25) : null,
+                foregroundColor: _selectedChannel == 'broadcast' ? _channelColor : null,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(_getAdaptivePadding(20)),
+                  side: BorderSide(
+                    color: _selectedChannel == 'broadcast' ? _channelColor : Colors.transparent,
+                  ),
+                ),
+                padding: buttonPadding,
+              ),
+              child: Text(
+                l10n.translate('broadcast_title'),
+                style: TextStyle(fontSize: buttonFontSize),
+              ),
+            ),
+            const SizedBox(width: 4),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildMessageBubble(ChatMessage message, bool isMe) {
     final theme = Theme.of(context);
+    final bubblePadding = _getAdaptivePadding(8);
+    final contentPadding = _getAdaptivePadding(16);
+    
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      padding: EdgeInsets.symmetric(vertical: bubblePadding / 2, horizontal: bubblePadding),
       child: Card(
         child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          contentPadding: EdgeInsets.symmetric(horizontal: contentPadding, vertical: bubblePadding),
           title: RichText(
             text: TextSpan(
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.textTheme.bodyLarge?.color,
+                fontSize: _getAdaptiveFontSize(14),
               ),
               children: [
                 TextSpan(
@@ -362,7 +521,7 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
                   text: message.message,
                   style: TextStyle(
                     color: theme.textTheme.bodyLarge?.color,
-                    fontSize: 15,
+                    fontSize: _getAdaptiveFontSize(15),
                     height: 1.2,
                   ),
                 ),
@@ -382,15 +541,24 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
         children: [
           Icon(
             Icons.chat_bubble_outline,
-            size: 48,
+            size: _getAdaptiveIconSize(48),
             color: _channelColor.withAlpha(128),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: _getAdaptivePadding(16)),
           Text(
-            'Nenhuma mensagem no canal ainda',
+            AppLocalizations.of(context).translate('no_messages_in_channel'),
             style: theme.textTheme.bodyLarge?.copyWith(
               color: theme.textTheme.bodySmall?.color,
+              fontSize: _getAdaptiveFontSize(14),
             ),
+          ),
+          SizedBox(height: _getAdaptivePadding(16)),
+          ElevatedButton(
+            onPressed: _requestChatHistory,
+            style: _isWindows ? ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            ) : null,
+            child: Text(AppLocalizations.of(context).translate('refresh_messages')),
           ),
         ],
       ),
@@ -398,19 +566,121 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
   }
 
   Widget _buildMessageList() {
-    // Filtra as mensagens pelo canal selecionado
-    final channelMessages = _messages.where(
-      (msg) => msg.channel.replaceAll('chat_', '') == _selectedChannel
-    ).toList();
+    final l10n = AppLocalizations.of(context);
+    if (_selectedChannel == 'broadcast') {
+      if (_broadcastHistory.isEmpty) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.campaign_rounded, size: 48, color: Colors.orange.withOpacity(0.5)),
+              const SizedBox(height: 16),
+              Text(l10n.translate('no_broadcasts'), style: TextStyle(color: Colors.grey)),
+            ],
+          ),
+        );
+      }
+      return ListView.builder(
+        controller: _scrollController,
+        itemCount: _broadcastHistory.length,
+        itemBuilder: (context, index) {
+          final item = _broadcastHistory[index];
+          final dt = DateTime.tryParse(item['timestamp'] ?? '') ?? DateTime.now();
+          return Card(
+            margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+            color: Colors.orange.withOpacity(0.08),
+            child: ListTile(
+              leading: const Icon(Icons.campaign_rounded, color: Colors.orange),
+              title: Text(item['message'] ?? '-', style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text('${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}'),
+            ),
+          );
+        },
+      );
+    } else {
+      // Filtra as mensagens pelo canal selecionado
+      final channelMessages = _messages.where(
+        (msg) => msg.channel.replaceAll('chat_', '') == _selectedChannel
+      ).toList();
 
-    return ListView.builder(
-      controller: _scrollController,
-      itemCount: channelMessages.length,
-      itemBuilder: (context, index) {
-        final message = channelMessages[index];
-        return _buildMessageBubble(message, false);
-      },
+      if (channelMessages.isEmpty) {
+        return _buildEmptyChannelMessage();
+      }
+
+      return ListView.builder(
+        controller: _scrollController,
+        itemCount: channelMessages.length,
+        itemBuilder: (context, index) {
+          final message = channelMessages[index];
+          return _buildMessageBubble(message, false);
+        },
+      );
+    }
+  }
+
+  // Adapta o conteúdo da tela quando não há conexão
+  Widget _buildNoConnectionContent(BuildContext context, AppLocalizations l10n) {
+    final iconSize = _isWindows 
+        ? MediaQuery.of(context).size.width * 0.08
+        : MediaQuery.of(context).size.width * 0.15;
+    
+    final fontSize = _isWindows
+        ? MediaQuery.of(context).size.width * 0.022
+        : MediaQuery.of(context).size.width * 0.045;
+        
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.cloud_off,
+            size: iconSize,
+            color: Colors.grey,
+          ),
+          SizedBox(height: MediaQuery.of(context).size.height * 0.02),
+          Text(
+            l10n.translate('no_server_connection'),
+            style: TextStyle(
+              fontSize: fontSize,
+              color: Colors.grey,
+            ),
+          ),
+          SizedBox(height: _getAdaptivePadding(20)),
+          ElevatedButton.icon(
+            onPressed: _ensureConnection,
+            icon: const Icon(Icons.refresh),
+            style: _isWindows ? ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              textStyle: const TextStyle(fontSize: 14),
+            ) : null,
+            label: Text(l10n.translate('try_connect')),
+          ),
+        ],
+      ),
     );
+  }
+
+  Future<void> _loadBroadcastHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList('broadcast_history') ?? [];
+    setState(() {
+      _broadcastHistory = list.map((e) => json.decode(e) as Map<String, dynamic>).toList();
+    });
+  }
+
+  Future<void> _saveBroadcastHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = _broadcastHistory.map((e) => json.encode(e)).toList();
+    await prefs.setStringList('broadcast_history', list);
+  }
+
+  Future<void> _addBroadcastToHistory(String message) async {
+    _broadcastHistory.add({
+      'message': message,
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+    await _saveBroadcastHistory();
+    setState(() {});
   }
 
   @override
@@ -418,112 +688,181 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     super.build(context);
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final websocketService = context.watch<WebSocketService>();
 
     return Scaffold(
       appBar: AppBar(
         title: Row(
           children: [
-            const Icon(Icons.chat_rounded),
-            const SizedBox(width: 12),
+            Icon(Icons.chat_rounded, size: _getAdaptiveIconSize(24)),
+            SizedBox(width: _getAdaptivePadding(12)),
             Text(l10n.translate('chat_title')),
           ],
         ),
-      ),
-      body: Column(
-        children: [
-          _buildChannelSelector(),
-          const Divider(height: 1),
-          Expanded(
-            child: _messages.isEmpty
-                ? _buildEmptyChannelMessage()
-                : _buildMessageList(),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh, size: _getAdaptiveIconSize(24)),
+            onPressed: _requestChatHistory,
+            tooltip: l10n.translate('refresh_tooltip'),
           ),
-          Container(
-            decoration: BoxDecoration(
-              color: theme.cardColor,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha(25),
-                  blurRadius: 4,
-                  offset: const Offset(0, -2),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: Container(
-                    constraints: const BoxConstraints(maxHeight: 120),
-                    decoration: BoxDecoration(
-                      color: theme.scaffoldBackgroundColor,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: theme.dividerColor.withAlpha(25),
-                      ),
+          IconButton(
+            icon: Icon(_isConnected ? Icons.wifi : Icons.wifi_off, size: _getAdaptiveIconSize(24)),
+            onPressed: () {
+              if (!_isConnected) {
+                _webSocketService.reconnectManually();
+                // Força atualização do estado após um breve delay
+                Future.delayed(const Duration(milliseconds: 500), () {
+                  if (mounted) {
+                    setState(() {
+                      _isConnected = _webSocketService.connectionStatus;
+                    });
+                  }
+                });
+              } else {
+                // Mostra status da conexão
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      l10n.translate('connection_status'),
+                      style: TextStyle(fontSize: _getAdaptiveFontSize(14)),
                     ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _messageController,
-                            decoration: InputDecoration(
-                              hintText: l10n.translate('type_message'),
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-                              hintStyle: TextStyle(
-                                color: theme.hintColor.withAlpha(153),
+                    backgroundColor: Colors.green,
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+            tooltip: _isConnected ? l10n.translate('connected_tooltip') : l10n.translate('reconnect_tooltip'),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          Column(
+            children: [
+              _buildChannelSelector(),
+              const Divider(height: 1),
+              Expanded(
+                child: StreamBuilder<bool>(
+                  stream: websocketService.connectionStatusStream,
+                  initialData: websocketService.connectionStatus,
+                  builder: (context, connectionSnapshot) {
+                    if (!connectionSnapshot.data!) {
+                      return _buildNoConnectionContent(context, l10n);
+                    }
+                    
+                    return _buildMessageList();
+                  },
+                ),
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(25),
+                      blurRadius: 4,
+                      offset: const Offset(0, -2),
+                    ),
+                  ],
+                ),
+                padding: EdgeInsets.symmetric(
+                  horizontal: _getAdaptivePadding(16), 
+                  vertical: _getAdaptivePadding(8)
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: Container(
+                        constraints: BoxConstraints(
+                          maxHeight: _isWindows ? 80 : 120
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.scaffoldBackgroundColor,
+                          borderRadius: BorderRadius.circular(_isWindows ? 16 : 24),
+                          border: Border.all(
+                            color: theme.dividerColor.withAlpha(25),
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _messageController,
+                                decoration: InputDecoration(
+                                  hintText: l10n.translate('type_message'),
+                                  border: InputBorder.none,
+                                  contentPadding: EdgeInsets.fromLTRB(
+                                    _getAdaptivePadding(20), 
+                                    _getAdaptivePadding(10), 
+                                    _getAdaptivePadding(20), 
+                                    _getAdaptivePadding(10)
+                                  ),
+                                  hintStyle: TextStyle(
+                                    color: theme.hintColor.withAlpha(153),
+                                    fontSize: _getAdaptiveFontSize(14),
+                                  ),
+                                ),
+                                maxLines: null,
+                                keyboardType: TextInputType.multiline,
+                                textInputAction: TextInputAction.newline,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontSize: _getAdaptiveFontSize(14),
+                                ),
+                                enabled: !_isSending && _isConnected,
+                                onSubmitted: (text) {
+                                  if (text.isNotEmpty) {
+                                    _sendMessage(text);
+                                  }
+                                },
                               ),
                             ),
-                            maxLines: null,
-                            keyboardType: TextInputType.multiline,
-                            textInputAction: TextInputAction.newline,
-                            style: theme.textTheme.bodyMedium,
-                            enabled: !_isSending,
-                            onSubmitted: (text) {
-                              if (text.isNotEmpty) {
-                                _sendMessage(text);
-                              }
-                            },
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.only(right: 4, bottom: 4),
-                          child: IconButton(
-                            onPressed: _isSending 
-                                ? null 
-                                : () {
-                                    final text = _messageController.text;
-                                    if (text.isNotEmpty) {
-                                      _sendMessage(text);
-                                    }
-                                  },
-                            style: IconButton.styleFrom(
-                              backgroundColor: theme.colorScheme.primary,
-                              foregroundColor: theme.colorScheme.onPrimary,
-                              padding: const EdgeInsets.all(10),
+                            Padding(
+                              padding: EdgeInsets.only(
+                                right: _getAdaptivePadding(4), 
+                                bottom: _getAdaptivePadding(4)
+                              ),
+                              child: IconButton(
+                                onPressed: (_isSending || !_isConnected)
+                                    ? null 
+                                    : () {
+                                        final text = _messageController.text;
+                                        if (text.isNotEmpty) {
+                                          _sendMessage(text);
+                                        }
+                                      },
+                                style: IconButton.styleFrom(
+                                  backgroundColor: theme.colorScheme.primary,
+                                  foregroundColor: theme.colorScheme.onPrimary,
+                                  padding: EdgeInsets.all(_getAdaptivePadding(10)),
+                                  disabledBackgroundColor: theme.colorScheme.primary.withOpacity(0.4),
+                                ),
+                                icon: _isSending
+                                    ? SizedBox(
+                                        width: _getAdaptiveIconSize(20),
+                                        height: _getAdaptiveIconSize(20),
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: _isWindows ? 1.5 : 2,
+                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white.withAlpha(255)),
+                                        ),
+                                      )
+                                    : Icon(Icons.send_rounded, 
+                                        size: _getAdaptiveIconSize(24)),
+                              ),
                             ),
-                            icon: _isSending
-                                ? SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white.withAlpha(255)),
-                                    ),
-                                  )
-                                : const Icon(Icons.send_rounded),
-                          ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
+          // Adiciona o ConnectionStatusPopup para padronizar com as outras telas
+          ConnectionStatusPopup(webSocketService: websocketService),
         ],
       ),
     );

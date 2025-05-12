@@ -45,11 +45,12 @@ class _ConfigScreenState extends State<ConfigScreen> {
       
       if (!mounted) return;
       final currentContext = context;
+      final l10n = AppLocalizations.of(currentContext);
       
       if (updateInfo == null) {
         ScaffoldMessenger.of(currentContext).showSnackBar(
-          const SnackBar(
-            content: Text('Você está usando a versão mais recente'),
+          SnackBar(
+            content: Text(l10n.translate('latest_version')),
           ),
         );
         return;
@@ -67,6 +68,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
     final updateInfo = await UpdateService.instance.checkForUpdates();
     if (updateInfo == null || !mounted) return;
 
+    final l10n = AppLocalizations.of(context);
+
     // Verifica permissão antes de tudo
     if (Platform.isAndroid) {
       final status = await Permission.requestInstallPackages.status;
@@ -75,19 +78,16 @@ class _ConfigScreenState extends State<ConfigScreen> {
         final shouldRequest = await showDialog<bool>(
           context: parentContext,
           builder: (dialogContext) => AlertDialog(
-            title: const Text('Permissão Necessária'),
-            content: const Text(
-              'Para instalar atualizações automaticamente, é necessário permitir a instalação de aplicativos desconhecidos por este app.\n\n'
-              'Na próxima tela, ative a opção "Permitir desta fonte".'
-            ),
+            title: Text(l10n.translate('permission_required')),
+            content: Text(l10n.translate('permission_explanation')),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Cancelar'),
+                child: Text(l10n.translate('cancel')),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Continuar'),
+                child: Text(l10n.translate('continue')),
               ),
             ],
           ),
@@ -118,7 +118,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
                 const Icon(Icons.system_update),
                 const SizedBox(width: 8),
                 Text(
-                  'Nova Versão ${updateInfo.version}',
+                  '${l10n.translate('new_version')} ${updateInfo.version}',
                   style: const TextStyle(fontSize: 20),
                 ),
               ],
@@ -136,17 +136,17 @@ class _ConfigScreenState extends State<ConfigScreen> {
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: const Text(
-                        'Esta é uma atualização obrigatória!',
-                        style: TextStyle(
+                      child: Text(
+                        l10n.translate('required_update'),
+                        style: const TextStyle(
                           color: Colors.red,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
-                  const Text(
-                    'Novidades:',
-                    style: TextStyle(
+                  Text(
+                    l10n.translate('whats_new'),
+                    style: const TextStyle(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -166,11 +166,11 @@ class _ConfigScreenState extends State<ConfigScreen> {
             actions: [
               TextButton(
                 onPressed: updateInfo.required ? null : () => Navigator.pop(dialogContext, false),
-                child: const Text('Depois'),
+                child: Text(l10n.translate('later')),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Atualizar Agora'),
+                child: Text(l10n.translate('update_now')),
               ),
             ],
           ),
@@ -285,13 +285,13 @@ class _ConfigScreenState extends State<ConfigScreen> {
         children: [
           // Seção de Aparência
           _buildCard(
-            title: 'Aparência',
+            title: l10n.translate('appearance'),
             icon: Icons.palette,
             children: [
               SwitchListTile(
-                title: const Text('Tema Escuro'),
+                title: Text(l10n.translate('dark_theme')),
                 subtitle: Text(
-                  'Alterna entre tema claro e escuro',
+                  l10n.translate('dark_theme_desc'),
                   style: theme.textTheme.bodySmall,
                 ),
                 value: themeProvider.isDarkMode,
@@ -303,22 +303,22 @@ class _ConfigScreenState extends State<ConfigScreen> {
 
           // Seção de Conexão
           _buildCard(
-            title: 'Conexão',
+            title: l10n.translate('connection'),
             icon: Icons.link,
             children: [
               TextField(
                 controller: _baseUrlController,
-                decoration: const InputDecoration(
-                  labelText: 'URL do Servidor',
-                  hintText: 'http://exemplo.com:3000',
+                decoration: InputDecoration(
+                  labelText: l10n.translate('server_url'),
+                  hintText: l10n.translate('server_url_hint'),
                 ),
                 enabled: !_isLoading,
               ),
               const SizedBox(height: 16),
               SwitchListTile(
-                title: const Text('Reconexão Automática'),
+                title: Text(l10n.translate('auto_reconnect')),
                 subtitle: Text(
-                  'Tentar reconectar automaticamente quando perder conexão',
+                  l10n.translate('auto_reconnect_desc'),
                   style: theme.textTheme.bodySmall,
                 ),
                 value: _autoReconnect,
@@ -327,16 +327,25 @@ class _ConfigScreenState extends State<ConfigScreen> {
               if (_autoReconnect) ...[
                 const SizedBox(height: 8),
                 ListTile(
-                  title: const Text('Tentativas de Reconexão'),
-                  subtitle: Slider(
-                    value: _reconnectAttempts.toDouble(),
-                    min: 1,
-                    max: 10,
-                    divisions: 9,
-                    label: _reconnectAttempts.toString(),
-                    onChanged: (value) => setState(() => 
-                      _reconnectAttempts = value.round()
-                    ),
+                  title: Text(l10n.translate('reconnect_attempts')),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.translate('max_reconnect_attempts').replaceAll('{0}', _reconnectAttempts.toString()),
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      Slider(
+                        value: _reconnectAttempts.toDouble(),
+                        min: 1,
+                        max: 10,
+                        divisions: 9,
+                        label: _reconnectAttempts.toString(),
+                        onChanged: (value) => setState(() => 
+                          _reconnectAttempts = value.round()
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -346,13 +355,13 @@ class _ConfigScreenState extends State<ConfigScreen> {
 
           // Seção de Notificações
           _buildCard(
-            title: 'Notificações',
+            title: l10n.translate('notifications'),
             icon: Icons.notifications,
             children: [
               SwitchListTile(
-                title: const Text('Notificações do Sistema'),
+                title: Text(l10n.translate('system_notifications')),
                 subtitle: Text(
-                  'Receber alertas sobre o estado do servidor',
+                  l10n.translate('system_notifications_desc'),
                   style: theme.textTheme.bodySmall,
                 ),
                 value: _showNotifications,
@@ -364,11 +373,11 @@ class _ConfigScreenState extends State<ConfigScreen> {
 
           // Seção Sobre
           _buildCard(
-            title: 'Sobre',
+            title: l10n.translate('about'),
             icon: Icons.info,
             children: [
               ListTile(
-                title: const Text('Versão'),
+                title: Text(l10n.translate('version')),
                 subtitle: Text(UpdateService.instance.currentVersion),
                 trailing: IconButton(
                   icon: _checkingUpdate 
@@ -387,8 +396,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
                       
                       if (updateInfo == null) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Você está usando a versão mais recente'),
+                          SnackBar(
+                            content: Text(l10n.translate('latest_version')),
                           ),
                         );
                         return;
@@ -405,14 +414,14 @@ class _ConfigScreenState extends State<ConfigScreen> {
               ),
               const Divider(),
               ListTile(
-                title: const Text('Desenvolvido por'),
+                title: Text(l10n.translate('developed_by')),
                 subtitle: const Text('Daniel Henrique [ Beats ]'),
                 trailing: IconButton(
                   icon: const Icon(Icons.link),
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Em breve: Link para o GitHub'),
+                      SnackBar(
+                        content: Text(l10n.translate('github_soon')),
                       ),
                     );
                   },
@@ -435,12 +444,12 @@ class _ConfigScreenState extends State<ConfigScreen> {
                   ),
                 )
               : const Icon(Icons.save),
-            label: const Text('Salvar Alterações'),
+            label: Text(l10n.translate('save_changes')),
           ),
           if (!_isLoading) ...[
             const SizedBox(height: 8),
             Text(
-              'Ao salvar, a conexão será reiniciada automaticamente.',
+              l10n.translate('save_connection_restart'),
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -468,16 +477,19 @@ class _DownloadDialog extends StatefulWidget {
 
 class _DownloadDialogState extends State<_DownloadDialog> {
   double _progress = 0;
-  String _status = 'Iniciando download...';
+  String _status = '';
   bool _error = false;
 
   @override
   void initState() {
     super.initState();
+    final l10n = AppLocalizations.of(context);
+    _status = l10n.translate('starting_download');
     _startDownload();
   }
 
   Future<void> _startDownload() async {
+    final l10n = AppLocalizations.of(context);
     try {
       final filePath = await DownloadService.downloadUpdate(
         widget.url,
@@ -486,7 +498,7 @@ class _DownloadDialogState extends State<_DownloadDialog> {
             if (!mounted) return;
             setState(() {
               _progress = received / total;
-              _status = 'Baixando... ${(_progress * 100).toStringAsFixed(1)}%';
+              _status = l10n.translate('downloading').replaceAll('{0}', (_progress * 100).toStringAsFixed(1));
             });
           }
         },
@@ -497,12 +509,12 @@ class _DownloadDialogState extends State<_DownloadDialog> {
       if (filePath == null) {
         setState(() {
           _error = true;
-          _status = 'Erro ao fazer download';
+          _status = l10n.translate('download_error');
         });
         return;
       }
 
-      setState(() => _status = 'Download concluído!');
+      setState(() => _status = l10n.translate('download_complete'));
 
       // Instala o APK
       if (Platform.isAndroid) {
@@ -510,7 +522,7 @@ class _DownloadDialogState extends State<_DownloadDialog> {
         if (await file.exists()) {
           if (!mounted) return;
           
-          setState(() => _status = 'Iniciando instalação...');
+          setState(() => _status = l10n.translate('starting_installation'));
           
           try {
             final success = await PlatformService.installApk(filePath);
@@ -518,7 +530,7 @@ class _DownloadDialogState extends State<_DownloadDialog> {
             
             if (success) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Instalação iniciada')),
+                SnackBar(content: Text(l10n.translate('installation_started'))),
               );
               Navigator.of(context).pop(true);
             } else {
@@ -528,7 +540,7 @@ class _DownloadDialogState extends State<_DownloadDialog> {
             debugPrint('Erro ao instalar APK: $e');
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Erro ao iniciar instalação')),
+              SnackBar(content: Text(l10n.translate('installation_error'))),
             );
           }
         }
@@ -541,15 +553,16 @@ class _DownloadDialogState extends State<_DownloadDialog> {
       if (!mounted) return;
       setState(() {
         _error = true;
-        _status = 'Erro ao fazer download';
+        _status = l10n.translate('download_error');
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return AlertDialog(
-      title: Text(_error ? 'Erro' : 'Baixando Atualização'),
+      title: Text(_error ? l10n.translate('error') : l10n.translate('downloading_update')),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -564,7 +577,7 @@ class _DownloadDialogState extends State<_DownloadDialog> {
         if (!widget.required || _error)
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text(_error ? 'Fechar' : 'Cancelar'),
+            child: Text(_error ? l10n.translate('close') : l10n.translate('cancel')),
           ),
       ],
     );

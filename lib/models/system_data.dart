@@ -152,106 +152,52 @@ class CpuInfo {
 
 class MemoryInfo {
   final double availableGb;
-  final PageFileInfo pageFile;
+  final double totalGb;
+  final double usagePercent;
   final PerformanceInfo performance;
 
   MemoryInfo({
     required this.availableGb,
-    required this.pageFile,
     required this.performance,
+    required this.totalGb,
+    required this.usagePercent,
   });
 
   factory MemoryInfo.fromJson(Map<String, dynamic> json) {
     return MemoryInfo(
       availableGb: (json['available_gb'] as num).toDouble(),
-      pageFile: PageFileInfo.fromJson(json['page_file'] as Map<String, dynamic>),
+      totalGb: (json['total_gb'] as num).toDouble(),
+      usagePercent: (json['usage_percent'] as num).toDouble(),
       performance: PerformanceInfo.fromJson(json['performance'] as Map<String, dynamic>),
     );
   }
 }
 
-class PageFileInfo {
-  final double availableGb;
-  final double totalGb;
-
-  PageFileInfo({
-    required this.availableGb,
-    required this.totalGb,
-  });
-
-  factory PageFileInfo.fromJson(Map<String, dynamic> json) {
-    return PageFileInfo(
-      availableGb: (json['available_gb'] as num).toDouble(),
-      totalGb: (json['total_gb'] as num).toDouble(),
-    );
-
-  }
-}
-
 class PerformanceInfo {
   final CommitInfo commit;
-  final int handleCount;
-  final KernelInfo kernel;
-  final int pageSize;
-  final int processCount;
-  final double systemCacheGb;
+  // Adicione outros campos se necessário
 
   PerformanceInfo({
     required this.commit,
-    required this.handleCount,
-    required this.kernel,
-    required this.pageSize,
-    required this.processCount,
-    required this.systemCacheGb,
   });
 
   factory PerformanceInfo.fromJson(Map<String, dynamic> json) {
     return PerformanceInfo(
       commit: CommitInfo.fromJson(json['commit'] as Map<String, dynamic>),
-      handleCount: json['handle_count'] as int,
-      kernel: KernelInfo.fromJson(json['kernel'] as Map<String, dynamic>),
-      pageSize: json['page_size'] as int,
-      processCount: json['process_count'] as int,
-      systemCacheGb: (json['system_cache_gb'] as num).toDouble(),
     );
   }
 }
 
 class CommitInfo {
-  final double limitGb;
-  final double peakGb;
   final double totalGb;
+  // Adicione outros campos se necessário
 
   CommitInfo({
-    required this.limitGb,
-    required this.peakGb,
     required this.totalGb,
   });
 
   factory CommitInfo.fromJson(Map<String, dynamic> json) {
     return CommitInfo(
-      limitGb: (json['limit_gb'] as num).toDouble(),
-      peakGb: (json['peak_gb'] as num).toDouble(),
-      totalGb: (json['total_gb'] as num).toDouble(),
-    );
-  }
-}
-
-class KernelInfo {
-  final double nonpagedGb;
-  final double pagedGb;
-  final double totalGb;
-
-  KernelInfo({
-    required this.nonpagedGb,
-    required this.pagedGb,
-    required this.totalGb,
-  });
-
-  factory KernelInfo.fromJson(Map<String, dynamic> json) {
-    return KernelInfo(
-      nonpagedGb: (json['nonpaged_gb'] as num).toDouble(),
-      pagedGb: (json['paged_gb'] as num).toDouble(),
       totalGb: (json['total_gb'] as num).toDouble(),
     );
   }

@@ -15,6 +15,7 @@ class WebSocketService extends ChangeNotifier {
   Timer? _reconnectTimer;
   Timer? _firstMessageTimer;
   Timer? _pingTimer;
+  Timer? _connectionCheckTimer;
   int _reconnectAttempts = 0;
   bool manualReconnectMode = false;
   bool _isConnecting = false;
@@ -25,6 +26,7 @@ class WebSocketService extends ChangeNotifier {
   static const _baseReconnectDelay = Duration(milliseconds: 2000);
   static const _maxReconnectDelay = Duration(seconds: 10);
   static const _pingInterval = Duration(seconds: 30);
+  static const _connectionCheckInterval = Duration(seconds: 15);
   
   final List<String> _serverAddresses = [];
   int _currentAddressIndex = 0;
@@ -50,11 +52,31 @@ class WebSocketService extends ChangeNotifier {
   WebSocketService(this._config) {
     _connectionStatusController.add(false);
     _isConnected = false;
+    
+    // Inicia o timer de verificação de conexão
+    _startConnectionCheckTimer();
+    
     notifyListeners();
   }
 
   void _log(String message) {
     debugPrint('[WebSocket] $message');
+  }
+
+  void _startConnectionCheckTimer() {
+    _connectionCheckTimer?.cancel();
+    _connectionCheckTimer = Timer.periodic(_connectionCheckInterval, (_) {
+      // Verifica se a conexão ainda está ativa
+      if (!_isConnecting && !_isStartingConnection && !_disposed) {
+        if (_channel == null || !_isConnected) {
+          _log('Verificação periódica detectou desconexão');
+          if (!manualReconnectMode && _config.autoReconnect) {
+            _log('Tentando reconectar automaticamente...');
+            startConnection();
+          }
+        }
+      }
+    });
   }
 
   Future<void> closeCurrentConnection() async {
@@ -154,23 +176,58 @@ class WebSocketService extends ChangeNotifier {
             return;
           }
 
-          final data = jsonData['data'] as Map<String, dynamic>;
+          // Verifica se data existe e é um Map, caso contrário, cria um Map vazio
+          final data = jsonData['data'];
           
           if (eventType == WebSocketEvents.chatHistory) {
-            // Processa cada canal
-            data.forEach((channel, messages) {
-              if (messages is List) {
-                for (final msgData in messages) {
-                  if (msgData is Map<String, dynamic>) {
-                    final message = ChatMessage.fromJson({
-                      ...msgData,
-                      'channel': channel,
-                    });
+            // Tratamento seguro para o caso de data ser null ou não ser um Map
+            if (data == null) {
+              _log('Histórico de chat vazio ou em formato inválido');
+              return;
+            }
+            
+            try {
+              if (data is Map<String, dynamic>) {
+                // Processa cada canal
+                data.forEach((channel, messages) {
+                  _log('Processando histórico do canal: $channel');
+                  if (messages is List) {
+                    _log('Histórico contém ${messages.length} mensagens');
+                    for (final msgData in messages) {
+                      if (msgData is Map<String, dynamic>) {
+                        final message = ChatMessage.fromJson({
+                          ...msgData,
+                          'channel': channel,
+                        });
+                        _chatMessageController.add(message);
+                      }
+                    }
+                  }
+                });
+              } else if (data is List) {
+                // Alguns servidores podem enviar uma lista direta de mensagens
+                _log('Histórico recebido como lista com ${data.length} mensagens');
+                for (final msgData in data) {
+                  if (msgData is Map<String, dynamic> && msgData.containsKey('channel')) {
+                    final message = ChatMessage.fromJson(msgData);
                     _chatMessageController.add(message);
                   }
                 }
+              } else {
+                _log('Formato de histórico inválido: ${data.runtimeType}');
               }
-            });
+            } catch (e) {
+              _log('Erro ao processar histórico: $e');
+            }
+            return;
+          }
+          
+          // Para outros eventos, certifica-se que data é Map<String, dynamic>
+          Map<String, dynamic> eventData;
+          if (data is Map<String, dynamic>) {
+            eventData = data;
+          } else {
+            _log('Formato de dados inválido para evento $eventType');
             return;
           }
           
@@ -179,19 +236,19 @@ class WebSocketService extends ChangeNotifier {
             case WebSocketEvents.chatTrade:
             case WebSocketEvents.chatHelp:
               final message = ChatMessage.fromJson({
-                ...data,
+                ...eventData,
                 'channel': eventType,
               });
               _chatMessageController.add(message);
               break;
               
             case WebSocketEvents.systemResources:
-              final systemData = SystemData.fromJson({'data': data});
+              final systemData = SystemData.fromJson({'data': eventData});
               _systemDataController.add(systemData);
               break;
               
             case WebSocketEvents.serverStatus:
-              final serverStatus = ServerStatus.fromJson(data);
+              final serverStatus = ServerStatus.fromJson(eventData);
               _serverStatusController.add(serverStatus);
               break;
           }
@@ -350,6 +407,13 @@ class WebSocketService extends ChangeNotifier {
             if (!receivedFirstMessage) {
               receivedFirstMessage = true;
               _firstMessageTimer?.cancel();
+              
+              // Marca como conectado assim que receber a primeira mensagem
+              if (!_isConnected && !_disposed) {
+                _isConnected = true;
+                _connectionStatusController.add(true);
+                notifyListeners();
+              }
             }
             if (message is String) {
               handleMessage(message);
@@ -371,6 +435,8 @@ class WebSocketService extends ChangeNotifier {
         );
 
         _currentAddressIndex = 0;
+        
+        // Marca como conectado, mas verifica novamente quando receber a primeira mensagem
         if (!_disposed) {
           _isConnected = true;
           _connectionStatusController.add(true);
@@ -399,6 +465,12 @@ class WebSocketService extends ChangeNotifier {
       }
     } else {
       _log('Tentativa de enviar mensagem sem conexão ativa');
+      
+      // Tenta reconectar automaticamente
+      if (!_isConnecting && !_isStartingConnection && !manualReconnectMode) {
+        _log('Tentando reconectar automaticamente...');
+        startConnection();
+      }
     }
   }
 
@@ -409,6 +481,7 @@ class WebSocketService extends ChangeNotifier {
     _reconnectTimer?.cancel();
     _firstMessageTimer?.cancel();
     _pingTimer?.cancel();
+    _connectionCheckTimer?.cancel();
     _systemDataController.close();
     _serverStatusController.close();
     _chatMessageController.close();

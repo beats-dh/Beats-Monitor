@@ -1,3 +1,4 @@
+import 'package:beats_monitor/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import '../models/system_data.dart';
 
@@ -17,42 +18,42 @@ class SystemCpuInfoCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Informações do Processador',
-              style: TextStyle(
+            Text(
+              AppLocalizations.of(context).translate('processor_info'),
+              style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 16),
-            _buildCpuInfo(),
+            _buildCpuInfo(context),
             const Divider(),
-            _buildCpuTimeInfo(),
+            _buildCpuTimeInfo(context),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildCpuInfo() {
+  Widget _buildCpuInfo(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildInfoRow('Processador', systemInfo.cpu.name),
-        _buildInfoRow('Arquitetura', '${systemInfo.architecture.toStringAsFixed(0)} bits'),
-        _buildInfoRow('Núcleos', systemInfo.cpuCores.toStringAsFixed(0)),
-        _buildInfoRow('Uso', '${systemInfo.cpu.usagePercent.toStringAsFixed(2)}%'),
+        _buildInfoRow(AppLocalizations.of(context).translate('processor_desc'), systemInfo.cpu.name),
+        _buildInfoRow(AppLocalizations.of(context).translate('architecture'), '${systemInfo.architecture.toStringAsFixed(0)} bits'),
+        _buildInfoRow(AppLocalizations.of(context).translate('cores'), systemInfo.cpuCores.toStringAsFixed(0)),
+        _buildInfoRow(AppLocalizations.of(context).translate('usage'), '${systemInfo.cpu.usagePercent.toStringAsFixed(2)}%'),
       ],
     );
   }
 
-  Widget _buildCpuTimeInfo() {
+  Widget _buildCpuTimeInfo(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Distribuição de Tempo',
-          style: TextStyle(
+        Text(
+          AppLocalizations.of(context).translate('cpu_time_distribution'),
+          style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
@@ -65,7 +66,7 @@ class SystemCpuInfoCard extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                'User: ${systemInfo.cpu.userTimePercent.toStringAsFixed(2)}%',
+                '${AppLocalizations.of(context).translate('user_time')}: ${systemInfo.cpu.userTimePercent.toStringAsFixed(2)}%',
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
@@ -76,7 +77,7 @@ class SystemCpuInfoCard extends StatelessWidget {
             ),
             Expanded(
               child: Text(
-                'Kernel: ${systemInfo.cpu.kernelTimePercent.toStringAsFixed(2)}%',
+                '${AppLocalizations.of(context).translate('kernel_time')}: ${systemInfo.cpu.kernelTimePercent.toStringAsFixed(2)}%',
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
@@ -87,7 +88,7 @@ class SystemCpuInfoCard extends StatelessWidget {
             ),
             Expanded(
               child: Text(
-                'Ocioso: ${systemInfo.cpu.idleTimePercent.toStringAsFixed(2)}%',
+                '${AppLocalizations.of(context).translate('idle_time')}: ${systemInfo.cpu.idleTimePercent.toStringAsFixed(2)}%',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,

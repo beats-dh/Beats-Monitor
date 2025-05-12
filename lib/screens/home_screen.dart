@@ -8,12 +8,20 @@ import 'monitor_screen.dart';
 import 'config_screen.dart';
 import 'server_info_screen.dart';
 import 'chat_screen.dart';
-import 'server_status_screen.dart';
+import 'online_players_screen.dart';
+import 'banned_players_screen.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  bool _isGridView = true;
 
   @override
   Widget build(BuildContext context) {
@@ -29,6 +37,15 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
         actions: [
+          IconButton(
+            icon: Icon(_isGridView ? Icons.view_list_rounded : Icons.grid_view_rounded),
+            tooltip: _isGridView ? l10n.translate('view_as_list') : l10n.translate('view_as_grid'),
+            onPressed: () {
+              setState(() {
+                _isGridView = !_isGridView;
+              });
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.language_rounded),
             onPressed: () {
@@ -71,76 +88,102 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: GridView.builder(
-        padding: EdgeInsets.all(kIsWeb || Platform.isWindows ? 12 : 24),
-        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: kIsWeb || Platform.isWindows ? 600 : 600,
-          mainAxisSpacing: kIsWeb || Platform.isWindows ? 12 : 24,
-          crossAxisSpacing: kIsWeb || Platform.isWindows ? 12 : 24,
-          childAspectRatio: kIsWeb || Platform.isWindows ? 1.2 : 1.0,
-        ),
-        itemCount: 5,
-        itemBuilder: (context, index) {
-          switch (index) {
-            case 0:
-              return _buildCard(
-                context,
-                'monitor_title',
-                Icons.monitor_heart_rounded,
-                Colors.red,
-                () => Navigator.push(
-                  context,
-                  PageTransition(child: const MonitorScreen()),
-                ),
-              );
-            case 1:
-              return _buildCard(
-                context,
-                'server_info_title',
-                Icons.computer_rounded,
-                Colors.blue,
-                () => Navigator.push(
-                  context,
-                  PageTransition(child: const ServerInfoScreen()),
-                ),
-              );
-            case 2:
-              return _buildCard(
-                context,
-                'server_status_title',
-                Icons.dns_rounded,
-                Colors.green,
-                () => Navigator.push(
-                  context,
-                  PageTransition(child: const ServerStatusScreen()),
-                ),
-              );
-            case 3:
-              return _buildCard(
-                context,
-                'chat_title',
-                Icons.chat_rounded,
-                Colors.orange,
-                () => Navigator.push(
-                  context,
-                  PageTransition(child: const ChatScreen()),
-                ),
-              );
-            default:
-              return _buildCard(
-                context,
-                'config_title',
-                Icons.settings_rounded,
-                Colors.purple,
-                () => Navigator.push(
-                  context,
-                  PageTransition(child: const ConfigScreen()),
-                ),
-              );
-          }
-        },
-      ),
+      body: _isGridView
+          ? GridView.builder(
+              padding: EdgeInsets.all(kIsWeb || Platform.isWindows ? 12 : 24),
+              gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: kIsWeb || Platform.isWindows ? 300 : 300,
+                mainAxisSpacing: kIsWeb || Platform.isWindows ? 12 : 24,
+                crossAxisSpacing: kIsWeb || Platform.isWindows ? 12 : 24,
+                childAspectRatio: kIsWeb || Platform.isWindows ? 1.2 : 1.0,
+              ),
+              itemCount: 6,
+              itemBuilder: (context, index) => _buildHomeItem(context, index),
+            )
+          : ListView.separated(
+              padding: EdgeInsets.all(kIsWeb || Platform.isWindows ? 12 : 24),
+              itemCount: 6,
+              separatorBuilder: (context, i) => SizedBox(height: kIsWeb || Platform.isWindows ? 12 : 24),
+              itemBuilder: (context, index) => _buildHomeItem(context, index, isList: true),
+            ),
     );
+  }
+
+  Widget _buildHomeItem(BuildContext context, int index, {bool isList = false}) {
+    switch (index) {
+      case 0:
+        return _buildCard(
+          context,
+          'monitor_title',
+          Icons.monitor_heart_rounded,
+          Colors.red,
+          () => Navigator.push(
+            context,
+            PageTransition(child: const MonitorScreen()),
+          ),
+          isList: isList,
+        );
+      case 1:
+        return _buildCard(
+          context,
+          'server_info_title',
+          Icons.dns_rounded,
+          Colors.blue,
+          () => Navigator.push(
+            context,
+            PageTransition(child: const ServerInfoScreen()),
+          ),
+          isList: isList,
+        );
+      case 2:
+        return _buildCard(
+          context,
+          'chat_title',
+          Icons.chat_rounded,
+          Colors.orange,
+          () => Navigator.push(
+            context,
+            PageTransition(child: const ChatScreen()),
+          ),
+          isList: isList,
+        );
+      case 3:
+        return _buildCard(
+          context,
+          'online_players_title',
+          Icons.people_alt_rounded,
+          Colors.green,
+          () => Navigator.push(
+            context,
+            PageTransition(child: const OnlinePlayersScreen()),
+          ),
+          isList: isList,
+        );
+      case 4:
+        return _buildCard(
+          context,
+          'banned_players_title',
+          Icons.block,
+          Colors.red,
+          () => Navigator.push(
+            context,
+            PageTransition(child: const BannedPlayersScreen()),
+          ),
+          isList: isList,
+        );
+      default:
+        return _buildCard(
+          context,
+          'config_title',
+          Icons.settings_rounded,
+          Colors.purple,
+          () => Navigator.push(
+            context,
+            PageTransition(child: const ConfigScreen()),
+          ),
+          isList: isList,
+        );
+    }
   }
 
   Widget _buildCard(
@@ -148,8 +191,9 @@ class HomeScreen extends StatelessWidget {
     String titleKey,
     IconData icon,
     Color color,
-    VoidCallback onTap,
-  ) {
+    VoidCallback onTap, {
+    bool isList = false,
+  }) {
     final l10n = AppLocalizations.of(context);
     final title = l10n.translate(titleKey);
     final baseKey = titleKey.replaceAll('_title', '');
@@ -157,7 +201,7 @@ class HomeScreen extends StatelessWidget {
 
     return Card(
       elevation: 2,
-      shadowColor: color.withAlpha(77), // 0.3 * 255 ≈ 77
+      shadowColor: color.withAlpha(77),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
@@ -166,42 +210,83 @@ class HomeScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: EdgeInsets.all(kIsWeb || Platform.isWindows ? 4 : 12),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: EdgeInsets.all(kIsWeb || Platform.isWindows ? 4 : 12),
-                decoration: BoxDecoration(
-                  color: color.withAlpha(26), // 0.1 * 255 ≈ 26
-                  borderRadius: BorderRadius.circular(kIsWeb || Platform.isWindows ? 8 : 12),
+          child: isList
+              ? Row(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(kIsWeb || Platform.isWindows ? 4 : 12),
+                      decoration: BoxDecoration(
+                        color: color.withAlpha(26),
+                        borderRadius: BorderRadius.circular(kIsWeb || Platform.isWindows ? 8 : 12),
+                      ),
+                      child: Icon(
+                        icon,
+                        size: kIsWeb || Platform.isWindows ? 20 : 32,
+                        color: color,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: kIsWeb || Platform.isWindows ? 12 : 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            description,
+                            style: TextStyle(
+                              fontSize: kIsWeb || Platform.isWindows ? 10 : 12,
+                              color: Theme.of(context).textTheme.bodySmall?.color,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                )
+              : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(kIsWeb || Platform.isWindows ? 4 : 12),
+                      decoration: BoxDecoration(
+                        color: color.withAlpha(26),
+                        borderRadius: BorderRadius.circular(kIsWeb || Platform.isWindows ? 8 : 12),
+                      ),
+                      child: Icon(
+                        icon,
+                        size: kIsWeb || Platform.isWindows ? 20 : 32,
+                        color: color,
+                      ),
+                    ),
+                    SizedBox(height: kIsWeb || Platform.isWindows ? 6 : 12),
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: kIsWeb || Platform.isWindows ? 12 : 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: kIsWeb || Platform.isWindows ? 2 : 4),
+                    Text(
+                      description,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: kIsWeb || Platform.isWindows ? 10 : 12,
+                        color: Theme.of(context).textTheme.bodySmall?.color,
+                      ),
+                    ),
+                  ],
                 ),
-                child: Icon(
-                  icon,
-                  size: kIsWeb || Platform.isWindows ? 20 : 32,
-                  color: color,
-                ),
-              ),
-              SizedBox(height: kIsWeb || Platform.isWindows ? 6 : 12),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: kIsWeb || Platform.isWindows ? 12 : 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: kIsWeb || Platform.isWindows ? 2 : 4),
-              Text(
-                description,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: kIsWeb || Platform.isWindows ? 10 : 12,
-                  color: Theme.of(context).textTheme.bodySmall?.color,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

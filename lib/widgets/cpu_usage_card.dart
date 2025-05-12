@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/system_data.dart';
 import '../services/websocket_service.dart';
+import '../l10n/app_localizations.dart';
 
 class CpuUsageCard extends StatelessWidget {
   const CpuUsageCard({super.key});
@@ -67,23 +68,23 @@ class CpuUsageCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Uso de CPU',
-                  style: TextStyle(
+                Text(
+                  AppLocalizations.of(context).translate('cpu_usage'),
+                  style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 16),
                 _buildCpuIndicator(
-                  'Processo',
+                  AppLocalizations.of(context).translate('process_name'),
                   process.cpu.usagePercent,
                   const Color.fromARGB(255, 7, 136, 241),
                   _formatProcessName(process.processName),
                 ),
                 const SizedBox(height: 16),
                 _buildCpuIndicator(
-                  'Sistema',
+                  AppLocalizations.of(context).translate('system_info'),
                   system.cpu.usagePercent,
                   const Color.fromARGB(255, 36, 190, 41),
                   system.cpu.name,
