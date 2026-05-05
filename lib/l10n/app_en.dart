@@ -2,14 +2,21 @@ class AppEn {
   static const Map<String, String> values = {
     // Titles
     'app_title': 'Beats Monitor',
-    'system_monitor': 'System Monitor',
-    'server_info': 'Server Information',
-    'settings': 'Settings',
+    'monitor_title': 'Monitor',
+    'server_info_title': 'Server Info',
+    'server_status_title': 'Server Status',
+    'chat_title': 'Chat',
+    'config_title': 'Settings',
     'login': 'Login',
+    'settings': 'Settings',
     
     // Descriptions
-    'system_monitor_desc': 'Real-time system monitoring',
+    'monitor_desc': 'Real-time system monitoring',
     'server_info_desc': 'Server details and status',
+    'server_status_desc': 'Current server status',
+    'chat_desc': 'Real-time chat',
+    'config_desc': 'Settings and preferences',
+    'login_desc': 'Login to access the system',
     'settings_desc': 'Settings and preferences',
     
     // Settings
@@ -25,8 +32,6 @@ class AppEn {
     'server_url': 'Server URL',
     'server_port': 'Server Port',
     'save_settings': 'Save Settings',
-    'config': 'Settings',
-    'monitor': 'Monitor',
     
     // Monitor
     'cpu_usage': 'CPU Usage',
@@ -64,7 +69,6 @@ class AppEn {
     'logout_confirm': 'Do you really want to logout?',
     
     // Server Info Screen
-    'server_status': 'Server Status',
     'state_control': 'State Control',
     'name': 'Name',
     'version': 'Version',
@@ -85,7 +89,6 @@ class AppEn {
     'disconnected': 'Disconnected',
     'connecting': 'Connecting...',
     'cancel_button': 'Cancel',
-    'server_info_title': 'Server Information',
     'button_online': 'Online',
     'button_offline': 'Offline',
     'button_maintenance': 'Maintenance',
@@ -96,7 +99,7 @@ class AppEn {
     'error_fetching_status': 'Error fetching server status',
     'error_status_code': 'Error {0} fetching server status',
     'error_connection': 'Connection error: {0}',
-    'chat': 'Chat',
+    'server_timeout': 'Connection timeout. Server is not responding.',
     'global_chat': 'Global Chat',
     'trade_chat': 'Trade Chat',
     'help_chat': 'Help Chat',

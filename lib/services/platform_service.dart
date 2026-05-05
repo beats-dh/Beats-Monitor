@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class PlatformService {
@@ -11,7 +12,9 @@ class PlatformService {
       final result = await platform.invokeMethod('installApk', {'filePath': filePath});
       return result == true;
     } on PlatformException catch (e) {
-      print('Error installing APK: ${e.message}');
+      if (kDebugMode) {
+        print('Error installing APK: ${e.message}');
+      }
       return false;
     }
   }

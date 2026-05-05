@@ -15,7 +15,6 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final localeProvider = context.watch<LocaleProvider>();
     return Scaffold(
@@ -78,7 +77,7 @@ class HomeScreen extends StatelessWidget {
         children: [
           _buildCard(
             context,
-            l10n.translate('monitor'),
+            'monitor_title',
             Icons.monitor_heart_rounded,
             Colors.red,
             () => Navigator.push(
@@ -88,7 +87,7 @@ class HomeScreen extends StatelessWidget {
           ),
           _buildCard(
             context,
-            l10n.translate('server_info'),
+            'server_info_title',
             Icons.computer_rounded,
             Colors.blue,
             () => Navigator.push(
@@ -98,7 +97,7 @@ class HomeScreen extends StatelessWidget {
           ),
           _buildCard(
             context,
-            l10n.translate('server_status'),
+            'server_status_title',
             Icons.dns_rounded,
             Colors.green,
             () => Navigator.push(
@@ -108,7 +107,7 @@ class HomeScreen extends StatelessWidget {
           ),
           _buildCard(
             context,
-            l10n.translate('chat'),
+            'chat_title',
             Icons.chat_rounded,
             Colors.orange,
             () => Navigator.push(
@@ -118,7 +117,7 @@ class HomeScreen extends StatelessWidget {
           ),
           _buildCard(
             context,
-            l10n.translate('config'),
+            'config_title',
             Icons.settings_rounded,
             Colors.purple,
             () => Navigator.push(
@@ -133,14 +132,19 @@ class HomeScreen extends StatelessWidget {
 
   Widget _buildCard(
     BuildContext context,
-    String title,
+    String titleKey,
     IconData icon,
     Color color,
     VoidCallback onTap,
   ) {
+    final l10n = AppLocalizations.of(context);
+    final title = l10n.translate(titleKey);
+    final baseKey = titleKey.replaceAll('_title', '');
+    final description = l10n.translate('${baseKey}_desc');
+
     return Card(
       elevation: 2,
-      shadowColor: color.withOpacity(0.3),
+      shadowColor: color.withAlpha(77), // 0.3 * 255 ≈ 77
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
@@ -156,7 +160,7 @@ class HomeScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withAlpha(26), // 0.1 * 255 ≈ 26
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
@@ -172,6 +176,15 @@ class HomeScreen extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                description,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).textTheme.bodySmall?.color,
                 ),
               ),
             ],

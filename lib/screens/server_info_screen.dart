@@ -56,8 +56,16 @@ class _ServerInfoScreenState extends State<ServerInfoScreen> {
     } catch (e) {
       if (!mounted) return;
       final l10n = AppLocalizations.of(context);
+      
+      String errorMessage;
+      if (e.toString().contains('TimeoutException') || e.toString().contains('SocketException')) {
+        errorMessage = l10n.translate('server_timeout');
+      } else {
+        errorMessage = l10n.translate('error_connection').replaceAll('{0}', e.toString());
+      }
+      
       setState(() {
-        _error = l10n.translate('error_connection').replaceAll('{0}', e.toString());
+        _error = errorMessage;
         _isLoading = false;
       });
     }
@@ -266,10 +274,10 @@ class _ServerInfoScreenState extends State<ServerInfoScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
+                    color: Colors.red.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: Colors.red.withOpacity(0.3),
+                      color: Colors.red.withValues(alpha: 0.3),
                     ),
                   ),
                   child: Column(
@@ -334,6 +342,38 @@ class _ServerInfoScreenState extends State<ServerInfoScreen> {
     ) ?? false;
   }
 
+  Widget _buildErrorMessage() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.error_outline,
+              color: Colors.red,
+              size: 48,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _error ?? '',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: Colors.red,
+              ),
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: _fetchServerStatus,
+              icon: const Icon(Icons.refresh),
+              label: Text(AppLocalizations.of(context).translate('try_again')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -349,7 +389,7 @@ class _ServerInfoScreenState extends State<ServerInfoScreen> {
       canPop: !(_isLoading || _isChangingState),
       child: Scaffold(
         appBar: AppBar(
-          title: Text(l10n.translate('server_status')),
+          title: Text(l10n.translate('server_info_title')),
           centerTitle: true,
           actions: [
             Stack(
@@ -389,29 +429,7 @@ class _ServerInfoScreenState extends State<ServerInfoScreen> {
     }
 
     if (_error != null && _serverStatus == null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.error_outline,
-              color: Colors.red,
-              size: 48,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              _error!,
-              style: const TextStyle(color: Colors.red),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _fetchServerStatus,
-              child: Text(l10n.translate('try_again')),
-            ),
-          ],
-        ),
-      );
+      return _buildErrorMessage();
     }
 
     if (_serverStatus == null) {

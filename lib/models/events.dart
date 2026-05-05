@@ -3,23 +3,72 @@ class ChatMessage {
   final String message;
   final String channel;
   final DateTime timestamp;
+  final int level;
 
   ChatMessage({
     required this.player,
     required this.message,
     required this.channel,
     required this.timestamp,
+    required this.level,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
-    return ChatMessage(
-      player: json['player']?.toString() ?? 'System',
-      message: json['message']?.toString() ?? '',
-      channel: json['channel']?.toString() ?? 'chat_global',
-      timestamp: json['timestamp'] is int
-          ? DateTime.fromMillisecondsSinceEpoch(json['timestamp'] * 1000)
-          : DateTime.now(),
-    );
+    String sanitizeString(dynamic value) {
+      if (value == null) return '';
+      
+      try {
+        return value.toString();
+      } catch (e) {
+        return '';  // Retorna string vazia se houver erro na conversão
+      }
+    }
+
+    DateTime parseTimestamp(dynamic value) {
+      if (value == null) return DateTime.now();
+      
+      try {
+        if (value is int) {
+          // Servidor envia timestamp em segundos, precisamos converter para milissegundos
+          return DateTime.fromMillisecondsSinceEpoch(value * 1000);
+        }
+        
+        if (value is String) {
+          // Tenta converter string para int
+          final intValue = int.tryParse(value);
+          if (intValue != null) {
+            return DateTime.fromMillisecondsSinceEpoch(intValue * 1000);
+          }
+        }
+      } catch (e) {
+        // Ignora erros e retorna data atual
+      }
+      
+      return DateTime.now();
+    }
+
+    try {
+      return ChatMessage(
+        player: sanitizeString(json['player']),
+        message: sanitizeString(json['message']),
+        channel: sanitizeString(json['channel']),
+        timestamp: parseTimestamp(json['timestamp']),
+        level: (json['level'] is int) 
+            ? json['level'] 
+            : (json['level'] is String) 
+                ? int.tryParse(json['level']) ?? 0 
+                : 0,
+      );
+    } catch (e) {
+      // Se houver qualquer erro no parsing, retorna uma mensagem de erro
+      return ChatMessage(
+        player: 'System',
+        message: 'Erro ao processar mensagem',
+        channel: 'chat_global',
+        timestamp: DateTime.now(),
+        level: 0,
+      );
+    }
   }
 }
 
