@@ -2,6 +2,12 @@
 
 Cross-platform Flutter client for monitoring an OTServBR-Global / Canary game server in real time. Connects over WebSocket to surface server status, system metrics, online and banned player lists, and in-game chat — from Android, iOS, Windows, or the web.
 
+## Demo
+
+https://github.com/beats-dh/Beats-Monitor/raw/main/docs/demo.mp4
+
+> If the video does not play inline, [click here to download/watch](docs/demo.mp4).
+
 ## Features
 
 - **Server status** — live uptime, version, player counts, world state.
