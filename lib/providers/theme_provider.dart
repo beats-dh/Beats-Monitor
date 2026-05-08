@@ -61,7 +61,7 @@ class ThemeProvider with ChangeNotifier {
       foregroundColor: Colors.white,
       elevation: 0,
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: Colors.grey[900],
       elevation: 2,
     ),

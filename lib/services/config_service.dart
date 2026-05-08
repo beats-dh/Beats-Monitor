@@ -6,16 +6,17 @@ class ConfigService extends ChangeNotifier {
   static const String _baseUrlKey = 'base_url';
   static const String _autoReconnectKey = 'auto_reconnect';
   static const String _reconnectAttemptsKey = 'reconnect_attempts';
-  static const String _defaultBaseUrl = '177.23.187.59:8081';
+  static const String _defaultWebBaseUrl = '/beats-monitor-api';
+  static const String _defaultNativeBaseUrl = '127.0.0.1:51842';
   
-  String _baseUrl = _defaultBaseUrl;
+  String _baseUrl = kIsWeb ? _defaultWebBaseUrl : _defaultNativeBaseUrl;
   bool _autoReconnect = true;
   int _reconnectAttempts = 5;
 
   String get baseUrl => _baseUrl;
-  String get apiBaseUrl => 'http://$_baseUrl/api/v1';
-  String get wsBaseUrl => 'ws://$_baseUrl/ws';
-  String get defaultBaseUrl => _defaultBaseUrl;
+  String get apiBaseUrl => _buildHttpBaseUrl(_baseUrl);
+  String get wsBaseUrl => _buildWebSocketBaseUrl(_baseUrl);
+  String get defaultBaseUrl => kIsWeb ? _defaultWebBaseUrl : _defaultNativeBaseUrl;
   bool get autoReconnect => _autoReconnect;
   int get reconnectAttempts => _reconnectAttempts;
 
@@ -26,6 +27,49 @@ class ConfigService extends ChangeNotifier {
   }
 
   ConfigService._internal();
+
+  String _cleanBaseUrl(String value) {
+    final trimmed = value.trim();
+    if (trimmed.length > 1 && trimmed.endsWith('/')) {
+      return trimmed.replaceAll(RegExp(r'/+$'), '');
+    }
+    return trimmed;
+  }
+
+  String _currentOrigin() {
+    final current = Uri.base;
+    if (!current.hasScheme || current.authority.isEmpty) {
+      return '';
+    }
+    return '${current.scheme}://${current.authority}';
+  }
+
+  String _buildHttpBaseUrl(String value) {
+    final base = _cleanBaseUrl(value);
+    if (base.startsWith('http://') || base.startsWith('https://')) {
+      return '$base/api/v1';
+    }
+    if (base.startsWith('/')) {
+      return '${_currentOrigin()}$base/api/v1';
+    }
+    return 'http://$base/api/v1';
+  }
+
+  String _buildWebSocketBaseUrl(String value) {
+    final base = _cleanBaseUrl(value);
+    if (base.startsWith('https://')) {
+      return 'wss://${base.substring('https://'.length)}/ws';
+    }
+    if (base.startsWith('http://')) {
+      return 'ws://${base.substring('http://'.length)}/ws';
+    }
+    if (base.startsWith('/')) {
+      final current = Uri.base;
+      final scheme = current.scheme == 'https' ? 'wss' : 'ws';
+      return '$scheme://${current.authority}$base/ws';
+    }
+    return 'ws://$base/ws';
+  }
 
   Future<void> init() async {
     final savedUrl = await storage.read(key: _baseUrlKey);
@@ -65,7 +109,7 @@ class ConfigService extends ChangeNotifier {
   }
 
   Future<void> resetToDefault() async {
-    await setBaseUrl(_defaultBaseUrl);
+    await setBaseUrl(defaultBaseUrl);
     await setAutoReconnect(true);
     await setReconnectAttempts(5);
   }
