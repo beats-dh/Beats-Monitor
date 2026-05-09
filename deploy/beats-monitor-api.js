@@ -20,21 +20,32 @@ const LOGIN_PASSWORD_HASH = process.env.BEATS_MONITOR_PASSWORD_HASH || "";
 const LOGIN_PASSWORD = process.env.BEATS_MONITOR_PASSWORD || "";
 const ALLOW_MUTATIONS = process.env.BEATS_MONITOR_ALLOW_MUTATIONS === "true";
 const ALLOWED_ORIGIN = process.env.BEATS_MONITOR_ALLOWED_ORIGIN || "";
+const GAME_AUTH_ENABLED = parseBoolean(process.env.BEATS_MONITOR_GAME_AUTH || "false");
+const REQUIRED_PLAYER_NAME = process.env.BEATS_MONITOR_REQUIRED_PLAYER_NAME || "";
+const MIN_GROUP_ID = Number.parseInt(process.env.BEATS_MONITOR_MIN_GROUP_ID || "6", 10);
+const CHAT_SOURCE = process.env.BEATS_MONITOR_CHAT_SOURCE || "database";
+const CHAT_HISTORY_LIMIT = Number.parseInt(process.env.BEATS_MONITOR_CHAT_HISTORY_LIMIT || "200", 10);
+const CHAT_POLL_MS = Number.parseInt(process.env.BEATS_MONITOR_CHAT_POLL_MS || "2000", 10);
 
 if (!TOKEN_SECRET || TOKEN_SECRET.length < 32) {
   failStart("BEATS_MONITOR_TOKEN_SECRET must be set and at least 32 characters.");
 }
 
-if (!LOGIN_USER || (!LOGIN_PASSWORD_HASH && !LOGIN_PASSWORD)) {
-  failStart("BEATS_MONITOR_USER and BEATS_MONITOR_PASSWORD_HASH must be set.");
+if (!GAME_AUTH_ENABLED && (!LOGIN_USER || (!LOGIN_PASSWORD_HASH && !LOGIN_PASSWORD))) {
+  failStart("BEATS_MONITOR_USER and BEATS_MONITOR_PASSWORD_HASH must be set unless BEATS_MONITOR_GAME_AUTH=true.");
 }
 
 const clients = new Set();
 let lastCpuSample = readCpuSample();
+let lastChatMessageId = 0;
 
 function failStart(message) {
   console.error(`[beats-monitor-api] ${message}`);
   process.exit(1);
+}
+
+function parseBoolean(value) {
+  return ["1", "true", "yes", "on"].includes(String(value || "").toLowerCase());
 }
 
 function loadEnvFile(filePath) {
@@ -157,6 +168,90 @@ function constantEquals(left, right) {
 
 function hashPassword(password) {
   return crypto.createHash("sha256").update(String(password), "utf8").digest("hex");
+}
+
+function hashSha1(password) {
+  return crypto.createHash("sha1").update(String(password), "utf8").digest("hex");
+}
+
+function authenticateConfiguredLogin(username, password) {
+  if (!LOGIN_USER || (!LOGIN_PASSWORD_HASH && !LOGIN_PASSWORD)) {
+    return null;
+  }
+
+  const suppliedHash = hashPassword(password);
+  const expectedHash = LOGIN_PASSWORD_HASH || hashPassword(LOGIN_PASSWORD);
+  if (username !== LOGIN_USER || !constantEquals(suppliedHash, expectedHash)) {
+    return null;
+  }
+
+  return {
+    subject: username,
+    auth: "configured",
+    account_id: 0,
+    player: ""
+  };
+}
+
+function authenticateGameAccount(username, password) {
+  if (!GAME_AUTH_ENABLED || !username || !password) {
+    return null;
+  }
+
+  const safeUsername = sqlString(username);
+  const safePlayerName = sqlString(REQUIRED_PLAYER_NAME);
+  const fields = ["account_id", "account_name", "email", "stored_password", "account_type", "max_group_id", "required_group_id", "required_player"];
+  const requiredGroupColumn = REQUIRED_PLAYER_NAME
+    ? `MAX(CASE WHEN p.name = '${safePlayerName}' THEN p.group_id ELSE 0 END) AS required_group_id`
+    : "MAX(p.group_id) AS required_group_id";
+  const requiredPlayerColumn = REQUIRED_PLAYER_NAME
+    ? `MAX(CASE WHEN p.name = '${safePlayerName}' THEN p.name ELSE '' END) AS required_player`
+    : "MAX(p.name) AS required_player";
+  const sql = [
+    "SELECT a.id AS account_id, a.name AS account_name, a.email, a.password AS stored_password, a.type AS account_type,",
+    "MAX(p.group_id) AS max_group_id,",
+    requiredGroupColumn + ",",
+    requiredPlayerColumn,
+    "FROM accounts a",
+    "LEFT JOIN players p ON p.account_id = a.id",
+    `WHERE a.email = '${safeUsername}' OR a.name = '${safeUsername}'`,
+    "GROUP BY a.id, a.name, a.email, a.password, a.type",
+    "LIMIT 1;"
+  ].join(" ");
+
+  let rows;
+  try {
+    rows = mysqlQuery(sql, fields);
+  } catch (error) {
+    console.error("[beats-monitor-api] game auth query failed:", error.message);
+    return null;
+  }
+
+  if (!rows.length) {
+    return null;
+  }
+
+  const row = rows[0];
+  const storedPassword = String(row.stored_password || "").trim().toLowerCase();
+  const suppliedPassword = hashSha1(password).toLowerCase();
+  if (!constantEquals(storedPassword, suppliedPassword)) {
+    return null;
+  }
+
+  const maxGroupId = toInt(row.max_group_id);
+  const requiredGroupId = toInt(row.required_group_id);
+  const groupId = REQUIRED_PLAYER_NAME ? requiredGroupId : maxGroupId;
+  if (groupId < MIN_GROUP_ID) {
+    return null;
+  }
+
+  return {
+    subject: row.email || row.account_name,
+    auth: "game-account",
+    account_id: toInt(row.account_id),
+    player: REQUIRED_PLAYER_NAME ? row.required_player : "",
+    group_id: groupId
+  };
 }
 
 function getBearerToken(request) {
@@ -373,6 +468,108 @@ function buildPlayersPayload() {
   };
 }
 
+function chatEnabled() {
+  return CHAT_SOURCE === "database";
+}
+
+function normalizeChatChannels(channels) {
+  const allowed = new Set(["chat_global", "chat_trade", "chat_help"]);
+  if (!Array.isArray(channels) || !channels.length) {
+    return Array.from(allowed);
+  }
+  return channels.filter((channel) => allowed.has(String(channel)));
+}
+
+function chatRowToPayload(row) {
+  return {
+    player: row.player_name || "Unknown",
+    message: row.message || "",
+    timestamp: toInt(row.created_at, Math.floor(Date.now() / 1000)),
+    level: toInt(row.player_level)
+  };
+}
+
+function queryChatRows(whereSql, limit) {
+  if (!chatEnabled()) {
+    return [];
+  }
+
+  const fields = ["id", "channel_key", "player_name", "player_level", "message", "created_at"];
+  const sql = [
+    "SELECT id, channel_key, player_name, player_level,",
+    "REPLACE(REPLACE(message, CHAR(9), '    '), CHAR(10), ' ') AS message, created_at",
+    "FROM beats_monitor_chat_messages",
+    whereSql,
+    "ORDER BY id DESC",
+    `LIMIT ${Math.max(1, Math.min(toInt(limit, CHAT_HISTORY_LIMIT), 1000))};`
+  ].join(" ");
+
+  try {
+    return mysqlQuery(sql, fields);
+  } catch {
+    return [];
+  }
+}
+
+function buildChatHistoryPayload(channels) {
+  const selected = normalizeChatChannels(channels);
+  const result = {
+    chat_global: [],
+    chat_trade: [],
+    chat_help: []
+  };
+
+  if (!selected.length) {
+    return result;
+  }
+
+  const channelSql = selected.map((channel) => `'${sqlString(channel)}'`).join(",");
+  const rows = queryChatRows(`WHERE channel_key IN (${channelSql})`, CHAT_HISTORY_LIMIT).reverse();
+  rows.forEach((row) => {
+    if (!result[row.channel_key]) {
+      return;
+    }
+    result[row.channel_key].push(chatRowToPayload(row));
+  });
+
+  return result;
+}
+
+function initializeChatCursor() {
+  if (!chatEnabled()) {
+    return;
+  }
+  lastChatMessageId = toInt(safeMysqlScalar("SELECT IFNULL(MAX(id), 0) FROM beats_monitor_chat_messages;"));
+}
+
+function pollChatMessages() {
+  if (!chatEnabled()) {
+    return;
+  }
+
+  const fields = ["id", "channel_key", "player_name", "player_level", "message", "created_at"];
+  const sql = [
+    "SELECT id, channel_key, player_name, player_level,",
+    "REPLACE(REPLACE(message, CHAR(9), '    '), CHAR(10), ' ') AS message, created_at",
+    "FROM beats_monitor_chat_messages",
+    `WHERE id > ${lastChatMessageId}`,
+    "ORDER BY id ASC",
+    "LIMIT 200;"
+  ].join(" ");
+
+  let rows = [];
+  try {
+    rows = mysqlQuery(sql, fields);
+  } catch {
+    return;
+  }
+
+  rows.forEach((row) => {
+    lastChatMessageId = Math.max(lastChatMessageId, toInt(row.id));
+    broadcastEvent(row.channel_key, chatRowToPayload(row));
+  });
+}
+
 function buildPlayerPayload(name) {
   const safeName = sqlString(name);
   const fields = [
@@ -543,17 +740,17 @@ async function handleApiRequest(request, response) {
     const body = await readBody(request);
     const suppliedUser = String(body.username || "");
     const suppliedPassword = String(body.password || "");
-    const suppliedHash = hashPassword(suppliedPassword);
-    const expectedHash = LOGIN_PASSWORD_HASH || hashPassword(LOGIN_PASSWORD);
+    const identity = authenticateConfiguredLogin(suppliedUser, suppliedPassword)
+      || authenticateGameAccount(suppliedUser, suppliedPassword);
 
-    if (suppliedUser !== LOGIN_USER || !constantEquals(suppliedHash, expectedHash)) {
+    if (!identity) {
       sendJson(request, response, 401, { sucesso: false, mensagem: "Invalid credentials." });
       return;
     }
 
     const now = Math.floor(Date.now() / 1000);
     sendJson(request, response, 200, {
-      token: signToken({ sub: suppliedUser, iat: now, exp: now + TOKEN_TTL_SECONDS }),
+      token: signToken({ ...identity, iat: now, exp: now + TOKEN_TTL_SECONDS }),
       expires_in: TOKEN_TTL_SECONDS
     });
     return;
@@ -705,8 +902,8 @@ function handleSocketMessage(client, message) {
     return;
   }
 
-  const tokenPayload = verifyToken(payload.token);
-  if (!tokenPayload) {
+  const tokenPayload = client.authenticated ? {} : verifyToken(payload.token);
+  if (!client.authenticated && !tokenPayload) {
     sendToClient(client, { type: "error", message: "Unauthorized." });
     return;
   }
@@ -721,6 +918,24 @@ function handleSocketMessage(client, message) {
     if (client.subscriptions.has("server_status")) {
       sendToClient(client, { type: "event", event: "server_status", data: buildServerStatus().dados });
     }
+    if (client.subscriptions.has("chat_history")) {
+      sendToClient(client, { type: "event", event: "chat_history", data: buildChatHistoryPayload(payload.events) });
+    }
+    return;
+  }
+
+  if (payload.type === "chat_history") {
+    sendToClient(client, { type: "event", event: "chat_history", data: buildChatHistoryPayload(payload.channels) });
+    return;
+  }
+
+  if (payload.type === "chat_message") {
+    sendToClient(client, {
+      type: "error",
+      message: ALLOW_MUTATIONS
+        ? "Game chat sending is not wired yet. Chat reading is database-backed."
+        : "Chat sending is disabled in this production adapter."
+    });
     return;
   }
 
@@ -789,7 +1004,10 @@ setInterval(() => {
   broadcastEvent("server_status", buildServerStatus().dados);
 }, 2000);
 
+setInterval(pollChatMessages, Math.max(1000, CHAT_POLL_MS));
+
 server.listen(PORT, HOST, () => {
+  initializeChatCursor();
   console.log(`[beats-monitor-api] listening on http://${HOST}:${PORT}`);
 });
 

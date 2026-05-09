@@ -44,6 +44,22 @@ The service file expects a portable Node runtime at:
 /home/penultima/beats-monitor-api/node/bin/node
 ```
 
+For game-account login, enable these values in `.env`:
+
+```text
+BEATS_MONITOR_GAME_AUTH=true
+BEATS_MONITOR_REQUIRED_PLAYER_NAME=Waldir
+BEATS_MONITOR_MIN_GROUP_ID=6
+```
+
+This does not store the game password. The adapter checks the existing `accounts`
+password hash in MySQL and only accepts the account when the configured player is
+a GOD/staff character.
+
+Chat history/live chat is read from `beats_monitor_chat_messages`. The server
+datapack fills that table from the public chat channel scripts after the game is
+running code that contains the Beats Monitor chat logger.
+
 ## Activation
 
 Activation requires normal prod service steps:
