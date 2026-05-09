@@ -365,6 +365,10 @@ function sqlString(value) {
   return String(value).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
+function sqlLikeString(value) {
+  return sqlString(value).replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
 function toInt(value, fallback = 0) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -620,12 +624,60 @@ function chatRowToPayload(row) {
   };
 }
 
+function monitorPrivatePlayerName(identity) {
+  return String(identity?.player || REQUIRED_PLAYER_NAME || "").trim();
+}
+
+function privateRowVisibleToIdentity(row, identity) {
+  const playerName = monitorPrivatePlayerName(identity);
+  if (!playerName) {
+    return false;
+  }
+
+  const rowPlayer = String(row.player_name || "").trim().toLowerCase();
+  const monitorPlayer = playerName.toLowerCase();
+  if (rowPlayer === monitorPlayer) {
+    return true;
+  }
+
+  return String(row.message || "").trimStart().toLowerCase().startsWith(`to ${monitorPlayer}:`);
+}
+
+function chatHistoryWhereSql(channels, identity) {
+  const selected = normalizeChatChannels(channels);
+  if (!selected.length) {
+    return "";
+  }
+
+  const clauses = [];
+  const publicChannels = selected.filter((channel) => channel !== "chat_private");
+  if (publicChannels.length) {
+    const publicChannelSql = publicChannels.map((channel) => `'${sqlString(channel)}'`).join(",");
+    clauses.push(`channel_key IN (${publicChannelSql})`);
+  }
+
+  if (selected.includes("chat_private")) {
+    const playerName = monitorPrivatePlayerName(identity);
+    if (playerName) {
+      const safePlayer = sqlString(playerName);
+      const safePrefix = sqlLikeString(`to ${playerName}:`);
+      clauses.push(`(channel_key = 'chat_private' AND (player_name = '${safePlayer}' OR message LIKE '${safePrefix}%' ESCAPE '\\\\'))`);
+    }
+  }
+
+  return clauses.length ? `WHERE ${clauses.join(" OR ")}` : "";
+}
+
 function queryChatRows(whereSql, limit) {
   if (!chatEnabled()) {
     return [];
   }
 
   const fields = ["id", "channel_key", "player_name", "player_level", "message", "created_at"];
+  if (!whereSql) {
+    return [];
+  }
+
   const sql = [
     "SELECT id, channel_key, player_name, player_level,",
     "REPLACE(REPLACE(message, CHAR(9), '    '), CHAR(10), ' ') AS message, created_at",
@@ -642,7 +694,7 @@ function queryChatRows(whereSql, limit) {
   }
 }
 
-function buildChatHistoryPayload(channels) {
+function buildChatHistoryPayload(channels, identity) {
   const selected = normalizeChatChannels(channels);
   const result = {
     chat_local: [],
@@ -656,10 +708,12 @@ function buildChatHistoryPayload(channels) {
     return result;
   }
 
-  const channelSql = selected.map((channel) => `'${sqlString(channel)}'`).join(",");
-  const rows = queryChatRows(`WHERE channel_key IN (${channelSql})`, CHAT_HISTORY_LIMIT).reverse();
+  const rows = queryChatRows(chatHistoryWhereSql(selected, identity), CHAT_HISTORY_LIMIT).reverse();
   rows.forEach((row) => {
     if (!result[row.channel_key]) {
+      return;
+    }
+    if (row.channel_key === "chat_private" && !privateRowVisibleToIdentity(row, identity)) {
       return;
     }
     result[row.channel_key].push(chatRowToPayload(row));
@@ -699,6 +753,19 @@ function pollChatMessages() {
 
   rows.forEach((row) => {
     lastChatMessageId = Math.max(lastChatMessageId, toInt(row.id));
+    if (row.channel_key === "chat_private") {
+      const payload = chatRowToPayload(row);
+      for (const client of clients) {
+        if (
+          client.authenticated
+          && client.subscriptions.has("chat_private")
+          && privateRowVisibleToIdentity(row, client.identity)
+        ) {
+          sendToClient(client, { type: "event", event: "chat_private", data: payload });
+        }
+      }
+      return;
+    }
     broadcastEvent(row.channel_key, chatRowToPayload(row));
   });
 }
@@ -1081,13 +1148,13 @@ function handleSocketMessage(client, message) {
       sendToClient(client, { type: "event", event: "server_status", data: buildServerStatus().dados });
     }
     if (client.subscriptions.has("chat_history")) {
-      sendToClient(client, { type: "event", event: "chat_history", data: buildChatHistoryPayload(payload.events) });
+      sendToClient(client, { type: "event", event: "chat_history", data: buildChatHistoryPayload(payload.events, client.identity) });
     }
     return;
   }
 
   if (payload.type === "chat_history") {
-    sendToClient(client, { type: "event", event: "chat_history", data: buildChatHistoryPayload(payload.channels) });
+    sendToClient(client, { type: "event", event: "chat_history", data: buildChatHistoryPayload(payload.channels, client.identity) });
     return;
   }
 
@@ -1167,26 +1234,50 @@ function handleUpgrade(request, socket) {
   socket.on("error", () => clients.delete(client));
 }
 
-const server = http.createServer((request, response) => {
-  handleApiRequest(request, response).catch((error) => {
-    console.error("[penultima-monitor-api]", error);
-    sendJson(request, response, 500, { sucesso: false, mensagem: "Internal server error." });
+function startServer() {
+  const server = http.createServer((request, response) => {
+    handleApiRequest(request, response).catch((error) => {
+      console.error("[penultima-monitor-api]", error);
+      sendJson(request, response, 500, { sucesso: false, mensagem: "Internal server error." });
+    });
   });
-});
 
-server.on("upgrade", handleUpgrade);
+  server.on("upgrade", handleUpgrade);
 
-setInterval(() => {
-  broadcastEvent("system_resources", buildSystemPayload());
-  broadcastEvent("server_status", buildServerStatus().dados);
-}, 2000);
+  const statusInterval = setInterval(() => {
+    broadcastEvent("system_resources", buildSystemPayload());
+    broadcastEvent("server_status", buildServerStatus().dados);
+  }, 2000);
 
-setInterval(pollChatMessages, Math.max(1000, CHAT_POLL_MS));
+  const chatInterval = setInterval(pollChatMessages, Math.max(1000, CHAT_POLL_MS));
 
-server.listen(PORT, HOST, () => {
-  initializeChatCursor();
-  console.log(`[penultima-monitor-api] listening on http://${HOST}:${PORT}`);
-});
+  server.listen(PORT, HOST, () => {
+    initializeChatCursor();
+    console.log(`[penultima-monitor-api] listening on http://${HOST}:${PORT}`);
+  });
 
-process.on("SIGTERM", () => server.close(() => process.exit(0)));
-process.on("SIGINT", () => server.close(() => process.exit(0)));
+  process.on("SIGTERM", () => {
+    clearInterval(statusInterval);
+    clearInterval(chatInterval);
+    server.close(() => process.exit(0));
+  });
+  process.on("SIGINT", () => {
+    clearInterval(statusInterval);
+    clearInterval(chatInterval);
+    server.close(() => process.exit(0));
+  });
+
+  return server;
+}
+
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = {
+  chatHistoryWhereSql,
+  privateRowVisibleToIdentity,
+  monitorPrivatePlayerName,
+  chatCommandFromRequest,
+  startServer
+};
