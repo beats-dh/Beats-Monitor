@@ -107,7 +107,9 @@ class WebSocketService extends ChangeNotifier {
     } finally {
       _channel = null;
       _isConnecting = false;
-      notifyListeners();
+      if (!_disposed) {
+        notifyListeners();
+      }
     }
   }
 

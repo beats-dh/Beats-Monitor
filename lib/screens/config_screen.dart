@@ -415,7 +415,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
               const Divider(),
               ListTile(
                 title: Text(l10n.translate('developed_by')),
-                subtitle: const Text('Daniel Henrique [ Beats ]'),
+                subtitle: const Text('Daniel Henrique [ Penultima ]'),
                 trailing: IconButton(
                   icon: const Icon(Icons.link),
                   onPressed: () {

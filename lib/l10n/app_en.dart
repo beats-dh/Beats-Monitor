@@ -1,7 +1,7 @@
 class AppEn {
   static const Map<String, String> values = {
     // Titles
-    'app_title': 'Beats Monitor',
+    'app_title': 'Penultima Monitor',
     'monitor_title': 'Monitor',
     'server_info_title': 'Server Info',
     'server_status_title': 'Server Status',

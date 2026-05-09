@@ -41,7 +41,7 @@ let lastCpuSample = readCpuSample();
 let lastChatMessageId = 0;
 
 function failStart(message) {
-  console.error(`[beats-monitor-api] ${message}`);
+  console.error(`[penultima-monitor-api] ${message}`);
   process.exit(1);
 }
 
@@ -224,7 +224,7 @@ function authenticateGameAccount(username, password) {
   try {
     rows = mysqlQuery(sql, fields);
   } catch (error) {
-    console.error("[beats-monitor-api] game auth query failed:", error.message);
+    console.error("[penultima-monitor-api] game auth query failed:", error.message);
     return null;
   }
 
@@ -476,7 +476,7 @@ function ensureBeatsMonitorCommandTable() {
     "`channel_key` varchar(32) NOT NULL DEFAULT '',",
     "`target_name` varchar(255) NOT NULL DEFAULT '',",
     "`message` text NOT NULL,",
-    "`requested_by` varchar(255) NOT NULL DEFAULT 'Beats Monitor',",
+    "`requested_by` varchar(255) NOT NULL DEFAULT 'Penultima',",
     "`requested_by_account_id` int unsigned NOT NULL DEFAULT 0,",
     "`status` varchar(16) NOT NULL DEFAULT 'pending',",
     "`attempts` int unsigned NOT NULL DEFAULT 0,",
@@ -507,7 +507,7 @@ function enqueueBeatsMonitorCommand(command) {
     `'${sqlString(command.channel_key || "")}',`,
     `'${sqlString(command.target_name || "")}',`,
     `'${sqlString(String(command.message || "").slice(0, 1000))}',`,
-    `'${sqlString(command.requested_by || "Beats Monitor")}',`,
+    `'${sqlString(command.requested_by || "Penultima")}',`,
     `${toInt(command.requested_by_account_id)},`,
     `${now}`,
     ");"
@@ -516,7 +516,7 @@ function enqueueBeatsMonitorCommand(command) {
 }
 
 function chatCommandFromRequest(route, body, identity) {
-  const actor = identity?.player || identity?.subject || "Beats Monitor";
+  const actor = identity?.player || identity?.subject || "Penultima";
   const accountId = toInt(identity?.account_id);
 
   if (route === "server/broadcast") {
@@ -542,7 +542,7 @@ function chatCommandFromRequest(route, body, identity) {
 
   const channel = String(body.channel || "");
   if (channel === "chat_local") {
-    throw new Error("Local chat cannot be sent from Beats Monitor because it has no in-game position.");
+    throw new Error("Local chat cannot be sent from Penultima Monitor because it has no in-game position.");
   }
   if (channel === "chat_private") {
     return {
@@ -1169,7 +1169,7 @@ function handleUpgrade(request, socket) {
 
 const server = http.createServer((request, response) => {
   handleApiRequest(request, response).catch((error) => {
-    console.error("[beats-monitor-api]", error);
+    console.error("[penultima-monitor-api]", error);
     sendJson(request, response, 500, { sucesso: false, mensagem: "Internal server error." });
   });
 });
@@ -1185,7 +1185,7 @@ setInterval(pollChatMessages, Math.max(1000, CHAT_POLL_MS));
 
 server.listen(PORT, HOST, () => {
   initializeChatCursor();
-  console.log(`[beats-monitor-api] listening on http://${HOST}:${PORT}`);
+  console.log(`[penultima-monitor-api] listening on http://${HOST}:${PORT}`);
 });
 
 process.on("SIGTERM", () => server.close(() => process.exit(0)));

@@ -50,7 +50,7 @@ class _ConnectionStatusPopupState extends State<ConnectionStatusPopup> {
     final screenSize = MediaQuery.of(context).size;
     return _isWindows 
         ? 12 // Tamanho fixo menor para Windows
-        : MediaQuery.of(context).size.width * 0.035;
+        : screenSize.width * 0.035;
   }
   
   double _getBorderRadius(BuildContext context) {

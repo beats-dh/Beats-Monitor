@@ -57,13 +57,13 @@ void main() async {
         ChangeNotifierProvider<ConfigService>.value(value: configService),
         ChangeNotifierProvider(create: (_) => localeProvider),
       ],
-      child: const BeatsMonitorApp(),
+      child: const PenultimaMonitorApp(),
     ),
   );
 }
 
-class BeatsMonitorApp extends StatelessWidget {
-  const BeatsMonitorApp({super.key});
+class PenultimaMonitorApp extends StatelessWidget {
+  const PenultimaMonitorApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +71,7 @@ class BeatsMonitorApp extends StatelessWidget {
     
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Beats Monitor',
+      title: 'Penultima Monitor',
       locale: localeProvider.locale,
       supportedLocales: const [
         Locale('pt'),

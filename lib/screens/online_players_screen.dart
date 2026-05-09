@@ -236,8 +236,6 @@ class _OnlinePlayersScreenState extends State<OnlinePlayersScreen> {
 
           final root = snapshot.data!;
           final data = root['dados'] ?? {};
-          final total = data['total'] ?? 0;
-          final max = data['max'] ?? 0;
           final allPlayers = _playersLocal ?? (data['players'] as List<dynamic>?) ?? [];
           final filteredPlayers = _filterPlayers(allPlayers);
 
@@ -615,7 +613,7 @@ class _OnlinePlayersScreenState extends State<OnlinePlayersScreen> {
                       ? null
                       : () async {
                           final reason = reasonController.text.trim();
-                          final duration = int.tryParse(durationController.text.trim() ?? '');
+                          final duration = int.tryParse(durationController.text.trim());
                           if (reason.isEmpty || duration == null || duration <= 0) {
                             setState(() => errorText = AppLocalizations.of(context).translate('ban_invalid_reason_duration'));
                             return;
@@ -678,4 +676,4 @@ class _OnlinePlayersScreenState extends State<OnlinePlayersScreen> {
       },
     );
   }
-} 
+}

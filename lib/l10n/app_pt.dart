@@ -1,7 +1,7 @@
 class AppPt {
   static const Map<String, String> values = {
     // Títulos
-    'app_title': 'Beats Monitor',
+    'app_title': 'Penultima Monitor',
     'monitor_title': 'Monitor',
     'server_info_title': 'Informações do Servidor',
     'server_status_title': 'Status do Servidor',

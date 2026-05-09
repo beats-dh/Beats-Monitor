@@ -1,4 +1,4 @@
-# Beats Monitor
+# Penultima Monitor
 
 Cross-platform Flutter client for monitoring an OTServBR-Global / Canary game server in real time. Connects over WebSocket to surface server status, system metrics, online and banned player lists, and in-game chat — from Android, iOS, Windows, or the web.
 
@@ -98,13 +98,13 @@ The client derives the API and WebSocket URLs as:
 
 ## Backend
 
-Beats Monitor talks to a Canary-based OTServBR-Global server (C++23 MMORPG engine). The server exposes a JSON WebSocket and a REST API consumed by this client. See the [Canary repository](https://github.com/opentibiabr/canary) for backend setup.
+Penultima Monitor talks to a Canary-based OTServBR-Global server (C++23 MMORPG engine). The server exposes a JSON WebSocket and a REST API consumed by this client. See the [Canary repository](https://github.com/opentibiabr/canary) for backend setup.
 
 ## Branches
 
 - **`main`** — stable release branch.
 
-Branch names are prefixed with `beats` per project convention.
+Branch names are prefixed with `penultima-monitor` per project convention.
 
 ## License
 

@@ -1,6 +1,6 @@
 {
-    "name": "beats_monitor",
-    "short_name": "beats_monitor",
+    "name": "Penultima Monitor",
+    "short_name": "Penultima",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
