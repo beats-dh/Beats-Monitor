@@ -186,6 +186,33 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     }
   }
 
+  String _responseMessage(dynamic response, String fallbackKey) {
+    try {
+      final data = json.decode(response.body);
+      if (data is Map && data['mensagem'] is String && (data['mensagem'] as String).isNotEmpty) {
+        return data['mensagem'] as String;
+      }
+    } catch (_) {
+      // Use the localized fallback below.
+    }
+    return AppLocalizations.of(context).translate(fallbackKey);
+  }
+
+  Map<String, String>? _parsePrivateMessage(String text) {
+    final separator = text.indexOf(':');
+    if (separator <= 0 || separator == text.length - 1) {
+      return null;
+    }
+
+    final target = text.substring(0, separator).trim();
+    final message = text.substring(separator + 1).trim();
+    if (target.isEmpty || message.isEmpty) {
+      return null;
+    }
+
+    return {'target': target, 'message': message};
+  }
+
   Future<void> _sendMessage(String text) async {
     if (text.trim().isEmpty || _isSending) return;
 
@@ -193,11 +220,26 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
       try {
         setState(() => _isSending = true);
         final response = await ApiService.post('server/broadcast', body: {"message": text.trim()});
-        if (response.statusCode == 200) {
+        if (response.statusCode == 200 || response.statusCode == 202) {
           await _addBroadcastToHistory(text.trim());
           _messageController.clear();
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_responseMessage(response, 'error_sending_message')),
+              backgroundColor: Colors.red,
+            ),
+          );
         }
       } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(AppLocalizations.of(context).translate('error_sending_message')),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
         // Se erro, não faz nada e mantém o texto
       } finally {
         if (mounted) {
@@ -210,15 +252,51 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     // Comportamento padrão para outros canais
     try {
       setState(() => _isSending = true);
-      _ensureConnection();
-      _webSocketService.sendMessage({
-        'type': 'chat_message',
-        'data': {
-          'message': text.trim(),
-          'channel': 'chat_$_selectedChannel'
+      dynamic response;
+      if (_selectedChannel == 'private') {
+        final parsed = _parsePrivateMessage(text);
+        if (parsed == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(AppLocalizations.of(context).translate('private_message_format')),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          return;
         }
-      });
+        response = await ApiService.post('server/chat-message', body: {
+          "channel": "chat_private",
+          "target": parsed['target'],
+          "message": parsed['message'],
+        });
+      } else {
+        response = await ApiService.post('server/chat-message', body: {
+          "channel": "chat_$_selectedChannel",
+          "message": text.trim(),
+        });
+      }
+
+      if (response.statusCode != 200 && response.statusCode != 202) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_responseMessage(response, 'error_sending_message')),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
       _messageController.clear();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).translate('chat_command_queued')),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
       if (_scrollController.hasClients) {
         await _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,

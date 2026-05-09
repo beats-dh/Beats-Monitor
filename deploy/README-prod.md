@@ -17,7 +17,7 @@ The adapter intentionally does not start, stop, or restart the game server. Muta
 Run locally:
 
 ```powershell
-D:\Server\Tools\flutter\bin\flutter.bat build web --release --base-href /beats-monitor/
+D:\Server\Tools\flutter\bin\flutter.bat build web --release --base-href /beats-monitor/ --no-wasm-dry-run
 ```
 
 Publish `D:\Server\Beats-Monitor\build\web` to:
@@ -60,6 +60,10 @@ Chat history/live chat is read from `beats_monitor_chat_messages`. The server
 fills that table from the chat channel scripts and the game speech path after the
 game is running code that contains the Beats Monitor chat logger. The monitor
 reads local chat, World/English chat, trade, help, and private messages.
+
+Outgoing monitor chat is queued in `beats_monitor_commands`. Keep
+`BEATS_MONITOR_ALLOW_CHAT_SEND=false` unless the game server build containing the
+command consumer has been deployed and the game process has restarted normally.
 
 ## Activation
 

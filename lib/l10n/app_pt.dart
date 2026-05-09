@@ -93,6 +93,9 @@ class AppPt {
     'no_messages_in_channel': 'Nenhuma mensagem no canal ainda',
     'refresh_messages': 'Atualizar mensagens',
     'type_message': 'Sua mensagem...',
+    'error_sending_message': 'NÃ£o foi possÃ­vel enviar a mensagem.',
+    'chat_command_queued': 'Mensagem enfileirada para o servidor do jogo.',
+    'private_message_format': 'Use: Nome do jogador: mensagem',
     
     // Erros
     'error_connection': 'Erro de conexão: {0}',

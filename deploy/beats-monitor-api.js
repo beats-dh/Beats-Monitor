@@ -26,6 +26,7 @@ const MIN_GROUP_ID = Number.parseInt(process.env.BEATS_MONITOR_MIN_GROUP_ID || "
 const CHAT_SOURCE = process.env.BEATS_MONITOR_CHAT_SOURCE || "database";
 const CHAT_HISTORY_LIMIT = Number.parseInt(process.env.BEATS_MONITOR_CHAT_HISTORY_LIMIT || "200", 10);
 const CHAT_POLL_MS = Number.parseInt(process.env.BEATS_MONITOR_CHAT_POLL_MS || "2000", 10);
+const ALLOW_CHAT_SEND = parseBoolean(process.env.BEATS_MONITOR_ALLOW_CHAT_SEND || process.env.BEATS_MONITOR_ALLOW_MUTATIONS || "false");
 
 if (!TOKEN_SECRET || TOKEN_SECRET.length < 32) {
   failStart("BEATS_MONITOR_TOKEN_SECRET must be set and at least 32 characters.");
@@ -264,6 +265,10 @@ function isAuthenticated(request) {
   return Boolean(verifyToken(getBearerToken(request)));
 }
 
+function authenticatedIdentity(request) {
+  return verifyToken(getBearerToken(request));
+}
+
 function routePath(request) {
   const url = new URL(request.url, `http://${request.headers.host || `${HOST}:${PORT}`}`);
   let pathname = url.pathname;
@@ -347,6 +352,10 @@ function mysqlQuery(sql, fields) {
   });
 }
 
+function mysqlExecute(sql) {
+  mysqlQuery(sql, []);
+}
+
 function mysqlScalar(sql) {
   const rows = mysqlQuery(sql, ["value"]);
   return rows[0]?.value ?? "";
@@ -399,6 +408,30 @@ function commandText(command, args, fallback = "") {
   }
 }
 
+function gameProcessStartTimeMs(pid) {
+  if (!pid) {
+    return 0;
+  }
+  const started = commandText("ps", ["-o", "lstart=", "-p", pid], "");
+  const parsed = Date.parse(started);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function chatBridgeActive() {
+  const pid = canaryPid();
+  if (!pid) {
+    return false;
+  }
+
+  try {
+    const binaryMtime = fs.statSync(path.join(SERVER_ROOT, "canary")).mtimeMs;
+    const processStarted = gameProcessStartTimeMs(pid);
+    return processStarted > 0 && processStarted + 1000 >= binaryMtime;
+  } catch {
+    return false;
+  }
+}
+
 function maxPlayers() {
   const config = serverConfig();
   return toInt(config.maxPlayers, 0);
@@ -433,6 +466,104 @@ function safeMysqlScalar(sql) {
   } catch {
     return "";
   }
+}
+
+function ensureBeatsMonitorCommandTable() {
+  mysqlExecute([
+    "CREATE TABLE IF NOT EXISTS `beats_monitor_commands` (",
+    "`id` bigint unsigned NOT NULL AUTO_INCREMENT,",
+    "`action` varchar(32) NOT NULL,",
+    "`channel_key` varchar(32) NOT NULL DEFAULT '',",
+    "`target_name` varchar(255) NOT NULL DEFAULT '',",
+    "`message` text NOT NULL,",
+    "`requested_by` varchar(255) NOT NULL DEFAULT 'Beats Monitor',",
+    "`requested_by_account_id` int unsigned NOT NULL DEFAULT 0,",
+    "`status` varchar(16) NOT NULL DEFAULT 'pending',",
+    "`attempts` int unsigned NOT NULL DEFAULT 0,",
+    "`error` text NULL,",
+    "`created_at` int unsigned NOT NULL,",
+    "`processed_at` int unsigned NULL,",
+    "PRIMARY KEY (`id`),",
+    "KEY `idx_beats_monitor_commands_status` (`status`, `id`),",
+    "KEY `idx_beats_monitor_commands_created` (`created_at`, `id`)",
+    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+  ].join(" "));
+}
+
+function enqueueBeatsMonitorCommand(command) {
+  if (!chatBridgeActive()) {
+    const error = new Error("Game chat bridge is not active until the next game server restart.");
+    error.statusCode = 503;
+    throw error;
+  }
+
+  ensureBeatsMonitorCommandTable();
+  const now = Math.floor(Date.now() / 1000);
+  const sql = [
+    "INSERT INTO `beats_monitor_commands`",
+    "(`action`, `channel_key`, `target_name`, `message`, `requested_by`, `requested_by_account_id`, `created_at`)",
+    "VALUES (",
+    `'${sqlString(command.action)}',`,
+    `'${sqlString(command.channel_key || "")}',`,
+    `'${sqlString(command.target_name || "")}',`,
+    `'${sqlString(String(command.message || "").slice(0, 1000))}',`,
+    `'${sqlString(command.requested_by || "Beats Monitor")}',`,
+    `${toInt(command.requested_by_account_id)},`,
+    `${now}`,
+    ");"
+  ].join(" ");
+  mysqlExecute(sql);
+}
+
+function chatCommandFromRequest(route, body, identity) {
+  const actor = identity?.player || identity?.subject || "Beats Monitor";
+  const accountId = toInt(identity?.account_id);
+
+  if (route === "server/broadcast") {
+    return {
+      action: "broadcast",
+      channel_key: "chat_global",
+      message: body.message,
+      requested_by: actor,
+      requested_by_account_id: accountId
+    };
+  }
+
+  if (route === "players/message") {
+    return {
+      action: "private",
+      channel_key: "chat_private",
+      target_name: body.player || body.target || body.name,
+      message: body.message,
+      requested_by: actor,
+      requested_by_account_id: accountId
+    };
+  }
+
+  const channel = String(body.channel || "");
+  if (channel === "chat_local") {
+    throw new Error("Local chat cannot be sent from Beats Monitor because it has no in-game position.");
+  }
+  if (channel === "chat_private") {
+    return {
+      action: "private",
+      channel_key: "chat_private",
+      target_name: body.target || body.player || "",
+      message: body.message,
+      requested_by: actor,
+      requested_by_account_id: accountId
+    };
+  }
+  if (!["chat_global", "chat_trade", "chat_help"].includes(channel)) {
+    throw new Error("Unsupported chat channel.");
+  }
+  return {
+    action: "channel",
+    channel_key: channel,
+    message: body.message,
+    requested_by: actor,
+    requested_by_account_id: accountId
+  };
 }
 
 function buildPlayersPayload() {
@@ -758,7 +889,8 @@ async function handleApiRequest(request, response) {
     return;
   }
 
-  if (!isAuthenticated(request)) {
+  const identity = authenticatedIdentity(request);
+  if (!identity) {
     sendJson(request, response, 401, { sucesso: false, mensagem: "Unauthorized." });
     return;
   }
@@ -794,7 +926,34 @@ async function handleApiRequest(request, response) {
     return;
   }
 
-  if (request.method === "POST" && ["server/state", "server/broadcast", "players/ban", "players/kick", "players/message"].includes(route)) {
+  if (request.method === "POST" && ["server/broadcast", "server/chat-message", "players/message"].includes(route)) {
+    const body = await readBody(request);
+    if (!ALLOW_CHAT_SEND) {
+      sendJson(request, response, 403, {
+        sucesso: false,
+        mensagem: "Chat sending is disabled in this production adapter."
+      });
+      return;
+    }
+    try {
+      const command = chatCommandFromRequest(route, body, identity);
+      if (!String(command.message || "").trim()) {
+        sendJson(request, response, 400, { sucesso: false, mensagem: "Message is required." });
+        return;
+      }
+      if (command.action === "private" && !String(command.target_name || "").trim()) {
+        sendJson(request, response, 400, { sucesso: false, mensagem: "Private message target is required." });
+        return;
+      }
+      enqueueBeatsMonitorCommand(command);
+      sendJson(request, response, 202, { sucesso: true, mensagem: "Chat command queued for the game server." });
+    } catch (error) {
+      sendJson(request, response, error.statusCode || 400, { sucesso: false, mensagem: error.message });
+    }
+    return;
+  }
+
+  if (request.method === "POST" && ["server/state", "players/ban", "players/kick"].includes(route)) {
     await readBody(request);
     if (!ALLOW_MUTATIONS) {
       sendJson(request, response, 403, {
@@ -904,12 +1063,13 @@ function handleSocketMessage(client, message) {
     return;
   }
 
-  const tokenPayload = client.authenticated ? {} : verifyToken(payload.token);
+  const tokenPayload = client.authenticated ? client.identity : verifyToken(payload.token);
   if (!client.authenticated && !tokenPayload) {
     sendToClient(client, { type: "error", message: "Unauthorized." });
     return;
   }
   client.authenticated = true;
+  client.identity = tokenPayload || client.identity;
 
   if (payload.type === "subscribe" && Array.isArray(payload.events)) {
     payload.events.forEach((eventName) => client.subscriptions.add(eventName));
@@ -932,12 +1092,27 @@ function handleSocketMessage(client, message) {
   }
 
   if (payload.type === "chat_message") {
-    sendToClient(client, {
-      type: "error",
-      message: ALLOW_MUTATIONS
-        ? "Game chat sending is not wired yet. Chat reading is database-backed."
-        : "Chat sending is disabled in this production adapter."
-    });
+    if (!ALLOW_CHAT_SEND) {
+      sendToClient(client, { type: "error", message: "Chat sending is disabled in this production adapter." });
+      return;
+    }
+
+    try {
+      const body = payload.data || {};
+      const command = chatCommandFromRequest("server/chat-message", body, client.identity);
+      if (!String(command.message || "").trim()) {
+        sendToClient(client, { type: "error", message: "Message is required." });
+        return;
+      }
+      if (command.action === "private" && !String(command.target_name || "").trim()) {
+        sendToClient(client, { type: "error", message: "Private message target is required." });
+        return;
+      }
+      enqueueBeatsMonitorCommand(command);
+      sendToClient(client, { type: "chat_send_ack", message: "Chat command queued for the game server." });
+    } catch (error) {
+      sendToClient(client, { type: "error", message: error.message });
+    }
     return;
   }
 

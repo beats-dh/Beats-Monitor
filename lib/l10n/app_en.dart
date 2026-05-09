@@ -97,6 +97,9 @@ class AppEn {
     'logout': 'Logout',
     'logout_confirm': 'Do you really want to logout?',
     'type_message': 'Your message...',
+    'error_sending_message': 'Could not send message.',
+    'chat_command_queued': 'Message queued for the game server.',
+    'private_message_format': 'Use: Player Name: message',
     
     // Server Info Screen
     'state_control': 'State Control',
