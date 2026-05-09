@@ -52,12 +52,16 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
 
   Color get _channelColor {
     switch (_selectedChannel) {
+      case 'local':
+        return Colors.purple;
       case 'global':
         return Colors.blue;
       case 'trade':
         return Colors.green;
       case 'help':
         return Colors.orange;
+      case 'private':
+        return Colors.pink;
       default:
         return Colors.blue;
     }
@@ -167,7 +171,7 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
       // Solicita histórico para todos os canais
       _webSocketService.sendMessage({
         'type': 'chat_history',
-        'channels': ['chat_global', 'chat_trade', 'chat_help'] // Especifica todos os canais para garantir que receba todo o histórico
+        'channels': ['chat_local', 'chat_global', 'chat_trade', 'chat_help', 'chat_private'] // Especifica todos os canais para garantir que receba todo o histórico
       });
       _requestedHistory = true;
     } else {
@@ -275,9 +279,11 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
         
         // Apenas se inscreve nos canais de chat, sem iniciar nova conexão
         _webSocketService.subscribe([
+          'chat_local',
           'chat_global',
           'chat_trade',
           'chat_help',
+          'chat_private',
           'chat_history'  // Precisa subscrever para receber o histórico
         ]);
         
@@ -307,9 +313,11 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // Apenas cancela a inscrição dos eventos, sem fechar a conexão
       _webSocketService.unsubscribe([
+        'chat_local',
         'chat_global',
         'chat_trade',
         'chat_help',
+        'chat_private',
         'chat_history'
       ]);
     });
@@ -399,6 +407,25 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
           children: [
             const SizedBox(width: 4),
             TextButton(
+              onPressed: () => _selectChannel('local'),
+              style: TextButton.styleFrom(
+                backgroundColor: _selectedChannel == 'local' ? _channelColor.withAlpha(25) : null,
+                foregroundColor: _selectedChannel == 'local' ? _channelColor : null,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(_getAdaptivePadding(20)),
+                  side: BorderSide(
+                    color: _selectedChannel == 'local' ? _channelColor : Colors.transparent,
+                  ),
+                ),
+                padding: buttonPadding,
+              ),
+              child: Text(
+                l10n.translate('local_chat'),
+                style: TextStyle(fontSize: buttonFontSize),
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
               onPressed: () => _selectChannel('global'),
               style: TextButton.styleFrom(
                 backgroundColor: _selectedChannel == 'global' ? _channelColor.withAlpha(25) : null,
@@ -451,6 +478,25 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
               ),
               child: Text(
                 l10n.translate('help_chat'),
+                style: TextStyle(fontSize: buttonFontSize),
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: () => _selectChannel('private'),
+              style: TextButton.styleFrom(
+                backgroundColor: _selectedChannel == 'private' ? _channelColor.withAlpha(25) : null,
+                foregroundColor: _selectedChannel == 'private' ? _channelColor : null,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(_getAdaptivePadding(20)),
+                  side: BorderSide(
+                    color: _selectedChannel == 'private' ? _channelColor : Colors.transparent,
+                  ),
+                ),
+                padding: buttonPadding,
+              ),
+              child: Text(
+                l10n.translate('private_chat'),
                 style: TextStyle(fontSize: buttonFontSize),
               ),
             ),

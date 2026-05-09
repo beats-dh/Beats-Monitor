@@ -473,7 +473,7 @@ function chatEnabled() {
 }
 
 function normalizeChatChannels(channels) {
-  const allowed = new Set(["chat_global", "chat_trade", "chat_help"]);
+  const allowed = new Set(["chat_local", "chat_global", "chat_trade", "chat_help", "chat_private"]);
   if (!Array.isArray(channels) || !channels.length) {
     return Array.from(allowed);
   }
@@ -514,9 +514,11 @@ function queryChatRows(whereSql, limit) {
 function buildChatHistoryPayload(channels) {
   const selected = normalizeChatChannels(channels);
   const result = {
+    chat_local: [],
     chat_global: [],
     chat_trade: [],
-    chat_help: []
+    chat_help: [],
+    chat_private: []
   };
 
   if (!selected.length) {

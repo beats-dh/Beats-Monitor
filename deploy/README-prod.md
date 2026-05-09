@@ -57,8 +57,9 @@ password hash in MySQL and only accepts the account when the configured player i
 a GOD/staff character.
 
 Chat history/live chat is read from `beats_monitor_chat_messages`. The server
-datapack fills that table from the public chat channel scripts after the game is
-running code that contains the Beats Monitor chat logger.
+fills that table from the chat channel scripts and the game speech path after the
+game is running code that contains the Beats Monitor chat logger. The monitor
+reads local chat, World/English chat, trade, help, and private messages.
 
 ## Activation
 

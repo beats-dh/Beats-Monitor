@@ -232,9 +232,11 @@ class WebSocketService extends ChangeNotifier {
           }
           
           switch (eventType) {
+            case WebSocketEvents.chatLocal:
             case WebSocketEvents.chatGlobal:
             case WebSocketEvents.chatTrade:
             case WebSocketEvents.chatHelp:
+            case WebSocketEvents.chatPrivate:
               final message = ChatMessage.fromJson({
                 ...eventData,
                 'channel': eventType,
