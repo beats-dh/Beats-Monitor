@@ -11,7 +11,7 @@ class AppPt {
     'login': 'Login',
     'online_players_title': 'Jogadores Online',
     'online_players_desc': 'Veja todos os jogadores conectados no momento',
-    
+
     // Descrições
     'monitor_desc': 'Monitoramento em tempo real do sistema',
     'server_info_desc': 'Detalhes e status do servidor',
@@ -19,7 +19,7 @@ class AppPt {
     'chat_desc': 'Chat em tempo real',
     'config_desc': 'Ajustes e preferências',
     'settings_desc': 'Ajustes e preferências',
-    
+
     // Configurações
     'language': 'Idioma',
     'select_language': 'Selecionar idioma',
@@ -33,7 +33,7 @@ class AppPt {
     'server_url': 'URL do Servidor',
     'server_port': 'Porta do Servidor',
     'save_settings': 'Salvar Configurações',
-    
+
     // Monitor
     'cpu_usage': 'Uso de CPU',
     'memory_usage': 'Uso de Memória',
@@ -42,7 +42,8 @@ class AppPt {
     'processes': 'Processos',
     'refresh': 'Atualizar',
     'last_update': 'Última atualização',
-    'monitor_warning': 'As informações exibidas podem apresentar uma margem de erro (±) devido a limitações do sistema operacional.',
+    'monitor_warning':
+        'As informações exibidas podem apresentar uma margem de erro (±) devido a limitações do sistema operacional.',
     'processor_info': 'Informações do Processador',
     'processor_desc': 'Processador',
     'cpu': 'CPU',
@@ -63,7 +64,7 @@ class AppPt {
     'cores': 'Núcleos',
     'architecture': 'Arquitetura',
     'cpu_time_distribution': 'Distribuição de Tempo',
-    
+
     // Login
     'username': 'Usuário',
     'password': 'Senha',
@@ -71,7 +72,7 @@ class AppPt {
     'enter_password': 'Digite sua senha',
     'sign_in': 'Entrar',
     'remember_me': 'Lembrar-me',
-    
+
     // Mensagens
     'error': 'Erro',
     'success': 'Sucesso',
@@ -93,17 +94,26 @@ class AppPt {
     'no_messages_in_channel': 'Nenhuma mensagem no canal ainda',
     'refresh_messages': 'Atualizar mensagens',
     'type_message': 'Sua mensagem...',
+    'type_god_command':
+        'Digite o comando GOD exatamente, ex: /t Player,32365,32242,7',
+    'type_private_message_to': 'Mensagem para {0}',
     'error_sending_message': 'NÃ£o foi possÃ­vel enviar a mensagem.',
     'chat_command_queued': 'Mensagem enfileirada para o servidor do jogo.',
+    'god_command_queued': 'Comando GOD enfileirado para o servidor do jogo.',
     'private_message_format': 'Use: Nome do jogador: mensagem',
-    
+    'god_commands': 'Comandos',
+    'god_commands_desc':
+        'Os comandos sÃ£o executados como seu personagem no jogo. Digite o comando com barra exatamente como ele deve rodar no jogo.',
+    'no_private_conversations':
+        'Nenhuma mensagem privada enviada para vocÃª ainda.',
+
     // Erros
     'error_connection': 'Erro de conexão: {0}',
     'error_status_code': 'Erro no servidor: {0}',
     'error_fetching_status': 'Erro ao buscar status do servidor',
-    'server_timeout': 'Tempo limite de conexão excedido. Servidor não está respondendo.',
-  
-    
+    'server_timeout':
+        'Tempo limite de conexão excedido. Servidor não está respondendo.',
+
     // Server Info Screen
     'state_control': 'Controle de Estado',
     'name': 'Nome',
@@ -114,7 +124,8 @@ class AppPt {
     'warning': 'ATENÇÃO!',
     'confirm_shutdown': 'Tem certeza que deseja desligar o servidor?',
     'warning_action': '⚠️ Esta ação irá:',
-    'shutdown_consequences': '• Desconectar todos os jogadores\n• Garanta que tenha um auto start configurado',
+    'shutdown_consequences':
+        '• Desconectar todos os jogadores\n• Garanta que tenha um auto start configurado',
     'shutdown': 'DESLIGAR',
     'players_online': 'Jogadores Online',
     'online': 'ONLINE',
@@ -163,7 +174,8 @@ class AppPt {
     'broadcast_empty_error': 'Mensagem não pode ser vazia',
     'send': 'Enviar',
     'banned_players_title': 'Jogadores Banidos',
-    'banned_players_desc': 'Veja todos os jogadores atualmente banidos e desbanir se necessário',
+    'banned_players_desc':
+        'Veja todos os jogadores atualmente banidos e desbanir se necessário',
     'no_banned_players': 'Nenhum jogador banido no momento',
     'reason': 'Motivo',
     'banned_at': 'Banido em',
@@ -185,14 +197,15 @@ class AppPt {
     'ban_end': 'Fim',
     'downloading_update': 'Baixando Atualização',
     'close': 'Fechar',
-    
+
     // Diálogo de banimento
     'ban_player_title': 'Banir Jogador',
     'ban_reason': 'Motivo',
 
     'broadcast_title': 'Broadcast',
     'permission_required': 'Permissão necessária',
-    'permission_explanation': 'Para instalar atualizações automaticamente, você precisa permitir a instalação de aplicativos desconhecidos deste aplicativo.\n\nNa próxima tela, habilite "Permitir de esta fonte".',
+    'permission_explanation':
+        'Para instalar atualizações automaticamente, você precisa permitir a instalação de aplicativos desconhecidos deste aplicativo.\n\nNa próxima tela, habilite "Permitir de esta fonte".',
     'new_version': 'Nova versão',
 
     // Modos de visualização
@@ -228,7 +241,8 @@ class AppPt {
     'connection': 'Conexão',
     'server_url_hint': 'http://exemplo.com:3000',
     'auto_reconnect': 'Reconexão Automática',
-    'auto_reconnect_desc': 'Tentar reconectar automaticamente quando perder conexão',
+    'auto_reconnect_desc':
+        'Tentar reconectar automaticamente quando perder conexão',
     'notifications': 'Notificações',
     'system_notifications': 'Notificações do Sistema',
     'system_notifications_desc': 'Receber alertas sobre o estado do servidor',
@@ -237,7 +251,8 @@ class AppPt {
     'developed_by': 'Desenvolvido por',
     'github_soon': 'Em breve: Link do GitHub',
     'save_changes': 'Salvar Alterações',
-    'save_connection_restart': 'Ao salvar, a conexão será reiniciada automaticamente.',
+    'save_connection_restart':
+        'Ao salvar, a conexão será reiniciada automaticamente.',
 
     // Atualizações
     'required_update': 'Esta é uma atualização obrigatória!',

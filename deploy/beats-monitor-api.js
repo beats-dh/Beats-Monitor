@@ -27,6 +27,7 @@ const CHAT_SOURCE = process.env.BEATS_MONITOR_CHAT_SOURCE || "database";
 const CHAT_HISTORY_LIMIT = Number.parseInt(process.env.BEATS_MONITOR_CHAT_HISTORY_LIMIT || "200", 10);
 const CHAT_POLL_MS = Number.parseInt(process.env.BEATS_MONITOR_CHAT_POLL_MS || "2000", 10);
 const ALLOW_CHAT_SEND = parseBoolean(process.env.BEATS_MONITOR_ALLOW_CHAT_SEND || process.env.BEATS_MONITOR_ALLOW_MUTATIONS || "false");
+const ALLOW_GOD_COMMANDS = parseBoolean(process.env.BEATS_MONITOR_ALLOW_GOD_COMMANDS || process.env.BEATS_MONITOR_ALLOW_MUTATIONS || "false");
 
 if (!TOKEN_SECRET || TOKEN_SECRET.length < 32) {
   failStart("BEATS_MONITOR_TOKEN_SECRET must be set and at least 32 characters.");
@@ -523,6 +524,16 @@ function chatCommandFromRequest(route, body, identity) {
   const actor = identity?.player || identity?.subject || "Penultima";
   const accountId = toInt(identity?.account_id);
 
+  if (route === "server/god-command") {
+    return {
+      action: "god_command",
+      channel_key: "chat_private",
+      message: body.command || body.message || "",
+      requested_by: actor,
+      requested_by_account_id: accountId
+    };
+  }
+
   if (route === "server/broadcast") {
     return {
       action: "broadcast",
@@ -990,6 +1001,29 @@ async function handleApiRequest(request, response) {
       return;
     }
     sendJson(request, response, 200, { sucesso: true, dados: player });
+    return;
+  }
+
+  if (request.method === "POST" && route === "server/god-command") {
+    const body = await readBody(request);
+    if (!ALLOW_GOD_COMMANDS) {
+      sendJson(request, response, 403, {
+        sucesso: false,
+        mensagem: "God commands are disabled in this production adapter."
+      });
+      return;
+    }
+    try {
+      const command = chatCommandFromRequest(route, body, identity);
+      if (!String(command.message || "").trim()) {
+        sendJson(request, response, 400, { sucesso: false, mensagem: "Command is required." });
+        return;
+      }
+      enqueueBeatsMonitorCommand(command);
+      sendJson(request, response, 202, { sucesso: true, mensagem: "God command queued for the game server." });
+    } catch (error) {
+      sendJson(request, response, error.statusCode || 400, { sucesso: false, mensagem: error.message });
+    }
     return;
   }
 

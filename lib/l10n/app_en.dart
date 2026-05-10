@@ -11,11 +11,11 @@ class AppEn {
     'settings': 'Settings',
     'online_players_title': 'Online Players',
     'online_players_desc': 'See all players currently online',
-    
+
     // View modes
     'view_as_list': 'View as list',
     'view_as_grid': 'View as grid',
-    
+
     // Descriptions
     'monitor_desc': 'Real-time system monitoring',
     'server_info_desc': 'Server details and status',
@@ -24,7 +24,7 @@ class AppEn {
     'config_desc': 'Settings and preferences',
     'login_desc': 'Login to access the system',
     'settings_desc': 'Settings and preferences',
-    
+
     // Settings
     'language': 'Language',
     'select_language': 'Select language',
@@ -38,7 +38,7 @@ class AppEn {
     'server_url': 'Server URL',
     'server_port': 'Server Port',
     'save_settings': 'Save Settings',
-    
+
     // Monitor
     'cpu_usage': 'CPU Usage',
     'memory_usage': 'Memory Usage',
@@ -47,7 +47,8 @@ class AppEn {
     'processes': 'Processes',
     'refresh': 'Refresh',
     'last_update': 'Last update',
-    'monitor_warning': 'Displayed information may have a margin of error (±) due to operating system limitations.',
+    'monitor_warning':
+        'Displayed information may have a margin of error (±) due to operating system limitations.',
     'processor_info': 'Processor Information',
     'processor_desc': 'Processor',
     'system_info': 'System',
@@ -69,7 +70,7 @@ class AppEn {
     'cores': 'Cores',
     'architecture': 'Architecture',
     'cpu_time_distribution': 'Time Distribution',
-    
+
     // Login
     'username': 'Username',
     'password': 'Password',
@@ -77,7 +78,7 @@ class AppEn {
     'enter_password': 'Enter your password',
     'sign_in': 'Sign In',
     'remember_me': 'Remember me',
-    
+
     // Messages
     'error': 'Error',
     'success': 'Success',
@@ -97,10 +98,18 @@ class AppEn {
     'logout': 'Logout',
     'logout_confirm': 'Do you really want to logout?',
     'type_message': 'Your message...',
+    'type_god_command':
+        'Type the god command exactly, e.g. /t Player,32365,32242,7',
+    'type_private_message_to': 'Message {0}',
     'error_sending_message': 'Could not send message.',
     'chat_command_queued': 'Message queued for the game server.',
+    'god_command_queued': 'God command queued for the game server.',
     'private_message_format': 'Use: Player Name: message',
-    
+    'god_commands': 'Commands',
+    'god_commands_desc':
+        'Commands are executed as your in-game character. Type the slash command exactly as it should run in game.',
+    'no_private_conversations': 'No private messages sent to you yet.',
+
     // Server Info Screen
     'state_control': 'State Control',
     'name': 'Name',
@@ -112,7 +121,8 @@ class AppEn {
     'warning': 'WARNING!',
     'confirm_shutdown': 'Are you sure you want to shutdown the server?',
     'warning_action': '⚠️ This action will:',
-    'shutdown_consequences': '• Disconnect all players\n• Make sure you have auto start configured',
+    'shutdown_consequences':
+        '• Disconnect all players\n• Make sure you have auto start configured',
     'shutdown': 'SHUTDOWN',
     'online': 'ONLINE',
     'offline': 'CLOSED',
@@ -180,10 +190,12 @@ class AppEn {
     'unban_error': 'Error unbanning player',
     'confirm_unban_title': 'Confirm unban',
     'confirm_unban_message': 'Are you sure you want to unban player',
-    'banned_players_desc': 'See all currently banned players and unban if needed',
+    'banned_players_desc':
+        'See all currently banned players and unban if needed',
     'ban_duration_label': 'Duration (days)',
     'ban_duration_helper': '0 = permanent',
-    'ban_invalid_reason_duration': 'Fill in a valid reason and duration (greater than zero).',
+    'ban_invalid_reason_duration':
+        'Fill in a valid reason and duration (greater than zero).',
     'player_not_found': 'Player not found',
     'player_info_error': 'Error fetching player information',
     'ban_history_title': 'Ban History',
@@ -197,7 +209,7 @@ class AppEn {
     'h': 'h',
     'm': 'm',
     's': 's',
-    
+
     // Chat Screen
     'refresh_tooltip': 'Refresh messages',
     'connected_tooltip': 'Connected',
@@ -205,13 +217,13 @@ class AppEn {
     'connection_status': 'Status: Connected to server',
     'no_broadcasts': 'No broadcasts sent yet',
     'broadcast_title': 'Broadcast',
-    
+
     // Monitor Screen
     'loading_system_data': 'Loading system data...',
     'monitor_connection_status': 'Status: Connected to server',
     'monitor_connected_tooltip': 'Connected',
     'monitor_reconnect_tooltip': 'Reconnect',
-    
+
     // Config Screen
     'appearance': 'Appearance',
     'dark_theme': 'Dark Theme',
@@ -219,7 +231,8 @@ class AppEn {
     'connection': 'Connection',
     'server_url_hint': 'http://example.com:3000',
     'auto_reconnect': 'Auto Reconnect',
-    'auto_reconnect_desc': 'Try to reconnect automatically when connection is lost',
+    'auto_reconnect_desc':
+        'Try to reconnect automatically when connection is lost',
     'notifications': 'Notifications',
     'system_notifications': 'System Notifications',
     'system_notifications_desc': 'Receive alerts about server status',
@@ -228,9 +241,11 @@ class AppEn {
     'developed_by': 'Developed by',
     'github_soon': 'Coming soon: GitHub link',
     'save_changes': 'Save Changes',
-    'save_connection_restart': 'When saving, the connection will be restarted automatically.',
+    'save_connection_restart':
+        'When saving, the connection will be restarted automatically.',
     'permission_required': 'Permission Required',
-    'permission_explanation': 'To install updates automatically, you need to allow installation of unknown apps from this app.\n\nOn the next screen, enable "Allow from this source".',
+    'permission_explanation':
+        'To install updates automatically, you need to allow installation of unknown apps from this app.\n\nOn the next screen, enable "Allow from this source".',
     'continue': 'Continue',
     'new_version': 'New Version',
     'required_update': 'This is a required update!',
@@ -246,7 +261,7 @@ class AppEn {
     'installation_error': 'Error starting installation',
     'downloading_update': 'Downloading Update',
     'close': 'Close',
-    
+
     // Server States
     'state_online': 'ONLINE',
     'state_offline': 'OFFLINE',
@@ -259,11 +274,11 @@ class AppEn {
     'state_status': 'Status: {0}',
     'state_players': '{0} / {1}',
     'state_uptime': '{0}h {1}m {2}s',
-    
+
     // Ban dialog
     'ban_player_title': 'Ban Player',
     'ban_reason': 'Reason',
-    
+
     // Search and Filters
     'search_players': 'Search players...',
     'search_by_name_level_vocation': 'Search by name, level or vocation',
@@ -275,7 +290,7 @@ class AppEn {
     'sorcerer': 'Sorcerer',
     'druid': 'Druid',
     'none': 'None',
-    
+
     // Player Actions
     'kick_player': 'Kick Player',
     'kick_confirm': 'Are you sure you want to kick {0}?',

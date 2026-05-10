@@ -18,7 +18,8 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
+class _ChatScreenState extends State<ChatScreen>
+    with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   String _selectedChannel = 'global';
   StreamSubscription<ChatMessage>? _subscription;
@@ -33,19 +34,21 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
   bool _requestedHistory = false;
   bool _isConnected = false;
   List<Map<String, dynamic>> _broadcastHistory = [];
+  String? _selectedPrivatePeer;
+  static const String _monitorPlayerName = 'Waldir';
 
   // Verifica se está no Windows
   bool get _isWindows => !kIsWeb && Platform.isWindows;
-  
+
   // Ajusta tamanhos para Windows
   double _getAdaptiveFontSize(double mobileSize) {
     return _isWindows ? mobileSize * 0.7 : mobileSize;
   }
-  
+
   double _getAdaptiveIconSize(double mobileSize) {
     return _isWindows ? mobileSize * 0.7 : mobileSize;
   }
-  
+
   double _getAdaptivePadding(double mobilePadding) {
     return _isWindows ? mobilePadding * 0.7 : mobilePadding;
   }
@@ -62,6 +65,8 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
         return Colors.orange;
       case 'private':
         return Colors.pink;
+      case 'commands':
+        return Colors.redAccent;
       default:
         return Colors.blue;
     }
@@ -74,9 +79,11 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
 
   void _addMessage(ChatMessage message) {
     final key = _getMessageKey(message);
-    if (_messageKeys.add(key)) { // Retorna true se a key não existia
+    if (_messageKeys.add(key)) {
+      // Retorna true se a key não existia
       setState(() {
         _messages.add(message);
+        _selectedPrivatePeer ??= _privatePeerFor(message);
         // Ordena as mensagens por timestamp
         _messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
       });
@@ -88,12 +95,12 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
 
   bool _isNearBottom() {
     if (!_scrollController.hasClients) return true;
-    
+
     final position = _scrollController.position;
     // Aumentando o threshold e considerando também quando está no final
     const threshold = 150.0;
     return position.pixels >= (position.maxScrollExtent - threshold) ||
-           position.pixels == position.maxScrollExtent;
+        position.pixels == position.maxScrollExtent;
   }
 
   void _scrollToBottom() {
@@ -120,12 +127,12 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
             _isConnected = true;
           });
         }
-        
+
         final wasNearBottom = _isNearBottom();
-        
+
         // Se for uma mensagem do histórico ou nova, adiciona
         _addMessage(message);
-          
+
         // Se for uma mensagem do canal atual
         if (message.channel.replaceAll('chat_', '') == _selectedChannel) {
           // Se estava próximo do final, faz o scroll
@@ -133,7 +140,7 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
             _scrollToBottom();
           }
         }
-        
+
         // Marca que o histórico foi recebido após um pequeno delay
         if (!_historyReceived) {
           Future.delayed(const Duration(milliseconds: 300), () {
@@ -148,7 +155,8 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     });
 
     // Monitora o status da conexão
-    _connectionSubscription = _webSocketService.connectionStatusStream.listen((isConnected) {
+    _connectionSubscription =
+        _webSocketService.connectionStatusStream.listen((isConnected) {
       if (mounted) {
         setState(() {
           _isConnected = isConnected;
@@ -166,19 +174,26 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
 
   void _requestChatHistory() {
     _ensureConnection();
-    
+
     if (_webSocketService.connectionStatus) {
       // Solicita histórico para todos os canais
       _webSocketService.sendMessage({
         'type': 'chat_history',
-        'channels': ['chat_local', 'chat_global', 'chat_trade', 'chat_help', 'chat_private'] // Especifica todos os canais para garantir que receba todo o histórico
+        'channels': [
+          'chat_local',
+          'chat_global',
+          'chat_trade',
+          'chat_help',
+          'chat_private'
+        ] // Especifica todos os canais para garantir que receba todo o histórico
       });
       _requestedHistory = true;
     } else {
       // Se não conseguir enviar, mostra uma mensagem
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(AppLocalizations.of(context).translate('reconnecting_to_server')),
+          content: Text(
+              AppLocalizations.of(context).translate('reconnecting_to_server')),
           backgroundColor: Colors.orange,
           duration: const Duration(seconds: 2),
         ),
@@ -189,7 +204,9 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
   String _responseMessage(dynamic response, String fallbackKey) {
     try {
       final data = json.decode(response.body);
-      if (data is Map && data['mensagem'] is String && (data['mensagem'] as String).isNotEmpty) {
+      if (data is Map &&
+          data['mensagem'] is String &&
+          (data['mensagem'] as String).isNotEmpty) {
         return data['mensagem'] as String;
       }
     } catch (_) {
@@ -213,20 +230,123 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     return {'target': target, 'message': message};
   }
 
+  String _normalizeName(String value) => value.trim().toLowerCase();
+
+  bool _sameName(String left, String right) =>
+      _normalizeName(left) == _normalizeName(right);
+
+  Map<String, String>? _parsePrivateEnvelope(ChatMessage message) {
+    if (message.channel != 'chat_private') {
+      return null;
+    }
+
+    final sender = message.player.trim();
+    final text = message.message.trimLeft();
+    final toMatch = RegExp(r'^to\s+([^:]+):\s*(.*)$', caseSensitive: false)
+        .firstMatch(text);
+    if (toMatch != null) {
+      final target = toMatch.group(1)!.trim();
+      final body = toMatch.group(2)!.trimLeft();
+      if (_sameName(sender, _monitorPlayerName)) {
+        return {'peer': target, 'body': body, 'direction': 'out'};
+      }
+      if (_sameName(target, _monitorPlayerName)) {
+        return {'peer': sender, 'body': body, 'direction': 'in'};
+      }
+      return null;
+    }
+
+    final legacyMatch =
+        RegExp(r'^(.+?)\s+to\s+([^:]+):\s*(.*)$', caseSensitive: false)
+            .firstMatch(text);
+    if (legacyMatch != null) {
+      final from = legacyMatch.group(1)!.trim();
+      final target = legacyMatch.group(2)!.trim();
+      final body = legacyMatch.group(3)!.trimLeft();
+      if (_sameName(from, _monitorPlayerName)) {
+        return {'peer': target, 'body': body, 'direction': 'out'};
+      }
+      if (_sameName(target, _monitorPlayerName)) {
+        return {'peer': from, 'body': body, 'direction': 'in'};
+      }
+    }
+
+    return null;
+  }
+
+  String? _privatePeerFor(ChatMessage message) =>
+      _parsePrivateEnvelope(message)?['peer'];
+
+  List<String> _privatePeers() {
+    final latestByPeer = <String, DateTime>{};
+    final labelByKey = <String, String>{};
+    for (final message in _messages) {
+      final envelope = _parsePrivateEnvelope(message);
+      if (envelope == null) {
+        continue;
+      }
+      final peer = envelope['peer']!;
+      final key = _normalizeName(peer);
+      labelByKey[key] = peer;
+      final current = latestByPeer[key];
+      if (current == null || message.timestamp.isAfter(current)) {
+        latestByPeer[key] = message.timestamp;
+      }
+    }
+
+    final keys = latestByPeer.keys.toList()
+      ..sort(
+          (left, right) => latestByPeer[right]!.compareTo(latestByPeer[left]!));
+    return keys.map((key) => labelByKey[key]!).toList();
+  }
+
+  List<ChatMessage> _privateMessagesFor(String peer) {
+    return _messages.where((message) {
+      final envelope = _parsePrivateEnvelope(message);
+      return envelope != null && _sameName(envelope['peer']!, peer);
+    }).toList();
+  }
+
+  String _privateDisplayMessage(ChatMessage message) {
+    return _parsePrivateEnvelope(message)?['body'] ?? message.message;
+  }
+
+  bool _privateMessageIsMine(ChatMessage message) {
+    return _parsePrivateEnvelope(message)?['direction'] == 'out';
+  }
+
+  String _messageHintText(AppLocalizations l10n) {
+    if (_selectedChannel == 'commands') {
+      return l10n.translate('type_god_command');
+    }
+    if (_selectedChannel == 'private') {
+      final peer = _selectedPrivatePeer;
+      if (peer != null && peer.isNotEmpty) {
+        return l10n
+            .translate('type_private_message_to')
+            .replaceAll('{0}', peer);
+      }
+      return l10n.translate('private_message_format');
+    }
+    return l10n.translate('type_message');
+  }
+
   Future<void> _sendMessage(String text) async {
     if (text.trim().isEmpty || _isSending) return;
 
     if (_selectedChannel == 'broadcast') {
       try {
         setState(() => _isSending = true);
-        final response = await ApiService.post('server/broadcast', body: {"message": text.trim()});
+        final response = await ApiService.post('server/broadcast',
+            body: {"message": text.trim()});
         if (response.statusCode == 200 || response.statusCode == 202) {
           await _addBroadcastToHistory(text.trim());
           _messageController.clear();
         } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(_responseMessage(response, 'error_sending_message')),
+              content:
+                  Text(_responseMessage(response, 'error_sending_message')),
               backgroundColor: Colors.red,
             ),
           );
@@ -235,7 +355,8 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(AppLocalizations.of(context).translate('error_sending_message')),
+              content: Text(AppLocalizations.of(context)
+                  .translate('error_sending_message')),
               backgroundColor: Colors.red,
             ),
           );
@@ -249,16 +370,66 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
       return;
     }
 
+    if (_selectedChannel == 'commands') {
+      try {
+        setState(() => _isSending = true);
+        final response = await ApiService.post('server/god-command',
+            body: {"command": text});
+        if (response.statusCode == 200 || response.statusCode == 202) {
+          _messageController.clear();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(AppLocalizations.of(context)
+                    .translate('god_command_queued')),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  Text(_responseMessage(response, 'error_sending_message')),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(AppLocalizations.of(context)
+                  .translate('error_sending_message')),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isSending = false);
+        }
+      }
+      return;
+    }
+
     // Comportamento padrão para outros canais
     try {
       setState(() => _isSending = true);
       dynamic response;
       if (_selectedChannel == 'private') {
-        final parsed = _parsePrivateMessage(text);
+        final peers = _privatePeers();
+        final selectedPeer =
+            _selectedPrivatePeer ?? (peers.isNotEmpty ? peers.first : null);
+        final parsed = selectedPeer != null && selectedPeer.isNotEmpty
+            ? {'target': selectedPeer, 'message': text.trim()}
+            : _parsePrivateMessage(text);
         if (parsed == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(AppLocalizations.of(context).translate('private_message_format')),
+              content: Text(AppLocalizations.of(context)
+                  .translate('private_message_format')),
               backgroundColor: Colors.orange,
             ),
           );
@@ -269,6 +440,7 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
           "target": parsed['target'],
           "message": parsed['message'],
         });
+        _selectedPrivatePeer = parsed['target'];
       } else {
         response = await ApiService.post('server/chat-message', body: {
           "channel": "chat_$_selectedChannel",
@@ -280,7 +452,8 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(_responseMessage(response, 'error_sending_message')),
+              content:
+                  Text(_responseMessage(response, 'error_sending_message')),
               backgroundColor: Colors.red,
             ),
           );
@@ -291,7 +464,8 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context).translate('chat_command_queued')),
+            content: Text(
+                AppLocalizations.of(context).translate('chat_command_queued')),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 2),
           ),
@@ -308,7 +482,8 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context).translate('error_sending_message')),
+            content: Text(AppLocalizations.of(context)
+                .translate('error_sending_message')),
             backgroundColor: Colors.red,
           ),
         );
@@ -332,14 +507,15 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_initialized) {
         _webSocketService = context.read<WebSocketService>();
-        
+
         // Inicializa o estado de conexão com o valor atual
         setState(() {
           _isConnected = _webSocketService.connectionStatus;
         });
-        
+
         // Monitora o status da conexão
-        _connectionSubscription = _webSocketService.connectionStatusStream.listen((isConnected) {
+        _connectionSubscription =
+            _webSocketService.connectionStatusStream.listen((isConnected) {
           if (mounted) {
             setState(() {
               _isConnected = isConnected;
@@ -351,10 +527,10 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
             }
           }
         });
-        
+
         // Garante que temos uma conexão WebSocket
         _ensureConnection();
-        
+
         // Apenas se inscreve nos canais de chat, sem iniciar nova conexão
         _webSocketService.subscribe([
           'chat_local',
@@ -362,12 +538,12 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
           'chat_trade',
           'chat_help',
           'chat_private',
-          'chat_history'  // Precisa subscrever para receber o histórico
+          'chat_history' // Precisa subscrever para receber o histórico
         ]);
-        
+
         _setupMessageSubscription();
         _initialized = true;
-        
+
         // Solicita o histórico imediatamente se estiver conectado
         if (_webSocketService.connectionStatus && !_requestedHistory) {
           _requestChatHistory();
@@ -404,7 +580,7 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     _messages.clear();
     _messageKeys.clear();
     _historyReceived = false;
-    
+
     super.dispose();
   }
 
@@ -430,11 +606,11 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    
+
     // Se o aplicativo voltar ao primeiro plano, verifica a conexão
     if (state == AppLifecycleState.resumed) {
       _ensureConnection();
-      
+
       // Não solicitar histórico ao retornar para primeiro plano,
       // pois isso pode duplicar mensagens
       // Vamos apenas garantir a conexão e deixar o stream de mensagens
@@ -466,15 +642,12 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
   Widget _buildChannelSelector() {
     final l10n = AppLocalizations.of(context);
     final buttonPadding = EdgeInsets.symmetric(
-      horizontal: _getAdaptivePadding(_isWindows ? 8 : 12), 
-      vertical: _getAdaptivePadding(6)
-    );
+        horizontal: _getAdaptivePadding(_isWindows ? 8 : 12),
+        vertical: _getAdaptivePadding(6));
     final buttonFontSize = _getAdaptiveFontSize(_isWindows ? 12 : 13);
     final containerPadding = EdgeInsets.symmetric(
-      vertical: _getAdaptivePadding(6),
-      horizontal: _getAdaptivePadding(4)
-    );
-    
+        vertical: _getAdaptivePadding(6), horizontal: _getAdaptivePadding(4));
+
     return Container(
       padding: containerPadding,
       width: double.infinity,
@@ -487,12 +660,17 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
             TextButton(
               onPressed: () => _selectChannel('local'),
               style: TextButton.styleFrom(
-                backgroundColor: _selectedChannel == 'local' ? _channelColor.withAlpha(25) : null,
-                foregroundColor: _selectedChannel == 'local' ? _channelColor : null,
+                backgroundColor: _selectedChannel == 'local'
+                    ? _channelColor.withAlpha(25)
+                    : null,
+                foregroundColor:
+                    _selectedChannel == 'local' ? _channelColor : null,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(_getAdaptivePadding(20)),
                   side: BorderSide(
-                    color: _selectedChannel == 'local' ? _channelColor : Colors.transparent,
+                    color: _selectedChannel == 'local'
+                        ? _channelColor
+                        : Colors.transparent,
                   ),
                 ),
                 padding: buttonPadding,
@@ -506,12 +684,17 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
             TextButton(
               onPressed: () => _selectChannel('global'),
               style: TextButton.styleFrom(
-                backgroundColor: _selectedChannel == 'global' ? _channelColor.withAlpha(25) : null,
-                foregroundColor: _selectedChannel == 'global' ? _channelColor : null,
+                backgroundColor: _selectedChannel == 'global'
+                    ? _channelColor.withAlpha(25)
+                    : null,
+                foregroundColor:
+                    _selectedChannel == 'global' ? _channelColor : null,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(_getAdaptivePadding(20)),
                   side: BorderSide(
-                    color: _selectedChannel == 'global' ? _channelColor : Colors.transparent,
+                    color: _selectedChannel == 'global'
+                        ? _channelColor
+                        : Colors.transparent,
                   ),
                 ),
                 padding: buttonPadding,
@@ -525,12 +708,17 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
             TextButton(
               onPressed: () => _selectChannel('trade'),
               style: TextButton.styleFrom(
-                backgroundColor: _selectedChannel == 'trade' ? _channelColor.withAlpha(25) : null,
-                foregroundColor: _selectedChannel == 'trade' ? _channelColor : null,
+                backgroundColor: _selectedChannel == 'trade'
+                    ? _channelColor.withAlpha(25)
+                    : null,
+                foregroundColor:
+                    _selectedChannel == 'trade' ? _channelColor : null,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(_getAdaptivePadding(20)),
                   side: BorderSide(
-                    color: _selectedChannel == 'trade' ? _channelColor : Colors.transparent,
+                    color: _selectedChannel == 'trade'
+                        ? _channelColor
+                        : Colors.transparent,
                   ),
                 ),
                 padding: buttonPadding,
@@ -544,12 +732,17 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
             TextButton(
               onPressed: () => _selectChannel('help'),
               style: TextButton.styleFrom(
-                backgroundColor: _selectedChannel == 'help' ? _channelColor.withAlpha(25) : null,
-                foregroundColor: _selectedChannel == 'help' ? _channelColor : null,
+                backgroundColor: _selectedChannel == 'help'
+                    ? _channelColor.withAlpha(25)
+                    : null,
+                foregroundColor:
+                    _selectedChannel == 'help' ? _channelColor : null,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(_getAdaptivePadding(20)),
                   side: BorderSide(
-                    color: _selectedChannel == 'help' ? _channelColor : Colors.transparent,
+                    color: _selectedChannel == 'help'
+                        ? _channelColor
+                        : Colors.transparent,
                   ),
                 ),
                 padding: buttonPadding,
@@ -563,12 +756,17 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
             TextButton(
               onPressed: () => _selectChannel('private'),
               style: TextButton.styleFrom(
-                backgroundColor: _selectedChannel == 'private' ? _channelColor.withAlpha(25) : null,
-                foregroundColor: _selectedChannel == 'private' ? _channelColor : null,
+                backgroundColor: _selectedChannel == 'private'
+                    ? _channelColor.withAlpha(25)
+                    : null,
+                foregroundColor:
+                    _selectedChannel == 'private' ? _channelColor : null,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(_getAdaptivePadding(20)),
                   side: BorderSide(
-                    color: _selectedChannel == 'private' ? _channelColor : Colors.transparent,
+                    color: _selectedChannel == 'private'
+                        ? _channelColor
+                        : Colors.transparent,
                   ),
                 ),
                 padding: buttonPadding,
@@ -580,14 +778,43 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
             ),
             const SizedBox(width: 8),
             TextButton(
-              onPressed: () => _selectChannel('broadcast'),
+              onPressed: () => _selectChannel('commands'),
               style: TextButton.styleFrom(
-                backgroundColor: _selectedChannel == 'broadcast' ? _channelColor.withAlpha(25) : null,
-                foregroundColor: _selectedChannel == 'broadcast' ? _channelColor : null,
+                backgroundColor: _selectedChannel == 'commands'
+                    ? _channelColor.withAlpha(25)
+                    : null,
+                foregroundColor:
+                    _selectedChannel == 'commands' ? _channelColor : null,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(_getAdaptivePadding(20)),
                   side: BorderSide(
-                    color: _selectedChannel == 'broadcast' ? _channelColor : Colors.transparent,
+                    color: _selectedChannel == 'commands'
+                        ? _channelColor
+                        : Colors.transparent,
+                  ),
+                ),
+                padding: buttonPadding,
+              ),
+              child: Text(
+                l10n.translate('god_commands'),
+                style: TextStyle(fontSize: buttonFontSize),
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: () => _selectChannel('broadcast'),
+              style: TextButton.styleFrom(
+                backgroundColor: _selectedChannel == 'broadcast'
+                    ? _channelColor.withAlpha(25)
+                    : null,
+                foregroundColor:
+                    _selectedChannel == 'broadcast' ? _channelColor : null,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(_getAdaptivePadding(20)),
+                  side: BorderSide(
+                    color: _selectedChannel == 'broadcast'
+                        ? _channelColor
+                        : Colors.transparent,
                   ),
                 ),
                 padding: buttonPadding,
@@ -604,16 +831,19 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     );
   }
 
-  Widget _buildMessageBubble(ChatMessage message, bool isMe) {
+  Widget _buildMessageBubble(ChatMessage message, bool isMe,
+      {String? displayMessage, String? displayPlayer}) {
     final theme = Theme.of(context);
     final bubblePadding = _getAdaptivePadding(8);
     final contentPadding = _getAdaptivePadding(16);
-    
+
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: bubblePadding / 2, horizontal: bubblePadding),
+      padding: EdgeInsets.symmetric(
+          vertical: bubblePadding / 2, horizontal: bubblePadding),
       child: Card(
         child: ListTile(
-          contentPadding: EdgeInsets.symmetric(horizontal: contentPadding, vertical: bubblePadding),
+          contentPadding: EdgeInsets.symmetric(
+              horizontal: contentPadding, vertical: bubblePadding),
           title: RichText(
             text: TextSpan(
               style: theme.textTheme.bodyMedium?.copyWith(
@@ -629,7 +859,7 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
                 ),
                 const TextSpan(text: ' '),
                 TextSpan(
-                  text: message.player,
+                  text: displayPlayer ?? message.player,
                   style: TextStyle(
                     color: _channelColor,
                     fontWeight: FontWeight.bold,
@@ -642,7 +872,7 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
                   ),
                 ),
                 TextSpan(
-                  text: message.message,
+                  text: displayMessage ?? message.message,
                   style: TextStyle(
                     color: theme.textTheme.bodyLarge?.color,
                     fontSize: _getAdaptiveFontSize(15),
@@ -654,6 +884,89 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildPrivateConversationSelector() {
+    final peers = _privatePeers();
+    if (peers.isEmpty) {
+      return Padding(
+        padding: EdgeInsets.all(_getAdaptivePadding(12)),
+        child: Text(
+          AppLocalizations.of(context).translate('no_private_conversations'),
+          style: Theme.of(context)
+              .textTheme
+              .bodySmall
+              ?.copyWith(color: Colors.grey),
+        ),
+      );
+    }
+
+    final selected = _selectedPrivatePeer ?? peers.first;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: _getAdaptivePadding(8),
+        vertical: _getAdaptivePadding(6),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: peers.map((peer) {
+            final isSelected = _sameName(selected, peer);
+            return Padding(
+              padding: EdgeInsets.only(right: _getAdaptivePadding(8)),
+              child: ChoiceChip(
+                label: Text(peer),
+                selected: isSelected,
+                onSelected: (_) {
+                  setState(() {
+                    _selectedPrivatePeer = peer;
+                  });
+                  _scrollToBottom();
+                },
+                selectedColor: _channelColor.withAlpha(40),
+                side: BorderSide(
+                    color: isSelected ? _channelColor : Colors.transparent),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPrivateMessageList() {
+    final peers = _privatePeers();
+    final selectedPeer =
+        _selectedPrivatePeer ?? (peers.isNotEmpty ? peers.first : null);
+    final messages = selectedPeer == null
+        ? <ChatMessage>[]
+        : _privateMessagesFor(selectedPeer);
+
+    return Column(
+      children: [
+        _buildPrivateConversationSelector(),
+        const Divider(height: 1),
+        Expanded(
+          child: messages.isEmpty
+              ? _buildEmptyChannelMessage()
+              : ListView.builder(
+                  controller: _scrollController,
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) {
+                    final message = messages[index];
+                    final mine = _privateMessageIsMine(message);
+                    return _buildMessageBubble(
+                      message,
+                      mine,
+                      displayPlayer: mine ? _monitorPlayerName : message.player,
+                      displayMessage: _privateDisplayMessage(message),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 
@@ -679,10 +992,14 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
           SizedBox(height: _getAdaptivePadding(16)),
           ElevatedButton(
             onPressed: _requestChatHistory,
-            style: _isWindows ? ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            ) : null,
-            child: Text(AppLocalizations.of(context).translate('refresh_messages')),
+            style: _isWindows
+                ? ElevatedButton.styleFrom(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  )
+                : null,
+            child: Text(
+                AppLocalizations.of(context).translate('refresh_messages')),
           ),
         ],
       ),
@@ -697,9 +1014,11 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.campaign_rounded, size: 48, color: Colors.orange.withOpacity(0.5)),
+              Icon(Icons.campaign_rounded,
+                  size: 48, color: Colors.orange.withAlpha(128)),
               const SizedBox(height: 16),
-              Text(l10n.translate('no_broadcasts'), style: TextStyle(color: Colors.grey)),
+              Text(l10n.translate('no_broadcasts'),
+                  style: TextStyle(color: Colors.grey)),
             ],
           ),
         );
@@ -709,23 +1028,53 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
         itemCount: _broadcastHistory.length,
         itemBuilder: (context, index) {
           final item = _broadcastHistory[index];
-          final dt = DateTime.tryParse(item['timestamp'] ?? '') ?? DateTime.now();
+          final dt =
+              DateTime.tryParse(item['timestamp'] ?? '') ?? DateTime.now();
           return Card(
             margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-            color: Colors.orange.withOpacity(0.08),
+            color: Colors.orange.withAlpha(20),
             child: ListTile(
               leading: const Icon(Icons.campaign_rounded, color: Colors.orange),
-              title: Text(item['message'] ?? '-', style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text('${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}'),
+              title: Text(item['message'] ?? '-',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(
+                  '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}'),
             ),
           );
         },
       );
     } else {
+      if (_selectedChannel == 'commands') {
+        return Center(
+          child: Padding(
+            padding: EdgeInsets.all(_getAdaptivePadding(24)),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.terminal_rounded,
+                    size: 48, color: _channelColor.withAlpha(179)),
+                SizedBox(height: _getAdaptivePadding(16)),
+                Text(
+                  l10n.translate('god_commands_desc'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      color: Colors.grey, fontSize: _getAdaptiveFontSize(14)),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+
+      if (_selectedChannel == 'private') {
+        return _buildPrivateMessageList();
+      }
+
       // Filtra as mensagens pelo canal selecionado
-      final channelMessages = _messages.where(
-        (msg) => msg.channel.replaceAll('chat_', '') == _selectedChannel
-      ).toList();
+      final channelMessages = _messages
+          .where(
+              (msg) => msg.channel.replaceAll('chat_', '') == _selectedChannel)
+          .toList();
 
       if (channelMessages.isEmpty) {
         return _buildEmptyChannelMessage();
@@ -743,15 +1092,16 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
   }
 
   // Adapta o conteúdo da tela quando não há conexão
-  Widget _buildNoConnectionContent(BuildContext context, AppLocalizations l10n) {
-    final iconSize = _isWindows 
+  Widget _buildNoConnectionContent(
+      BuildContext context, AppLocalizations l10n) {
+    final iconSize = _isWindows
         ? MediaQuery.of(context).size.width * 0.08
         : MediaQuery.of(context).size.width * 0.15;
-    
+
     final fontSize = _isWindows
         ? MediaQuery.of(context).size.width * 0.022
         : MediaQuery.of(context).size.width * 0.045;
-        
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -773,10 +1123,13 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
           ElevatedButton.icon(
             onPressed: _ensureConnection,
             icon: const Icon(Icons.refresh),
-            style: _isWindows ? ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              textStyle: const TextStyle(fontSize: 14),
-            ) : null,
+            style: _isWindows
+                ? ElevatedButton.styleFrom(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    textStyle: const TextStyle(fontSize: 14),
+                  )
+                : null,
             label: Text(l10n.translate('try_connect')),
           ),
         ],
@@ -788,7 +1141,8 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     final prefs = await SharedPreferences.getInstance();
     final list = prefs.getStringList('broadcast_history') ?? [];
     setState(() {
-      _broadcastHistory = list.map((e) => json.decode(e) as Map<String, dynamic>).toList();
+      _broadcastHistory =
+          list.map((e) => json.decode(e) as Map<String, dynamic>).toList();
     });
   }
 
@@ -830,7 +1184,8 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
             tooltip: l10n.translate('refresh_tooltip'),
           ),
           IconButton(
-            icon: Icon(_isConnected ? Icons.wifi : Icons.wifi_off, size: _getAdaptiveIconSize(24)),
+            icon: Icon(_isConnected ? Icons.wifi : Icons.wifi_off,
+                size: _getAdaptiveIconSize(24)),
             onPressed: () {
               if (!_isConnected) {
                 _webSocketService.reconnectManually();
@@ -856,7 +1211,9 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
                 );
               }
             },
-            tooltip: _isConnected ? l10n.translate('connected_tooltip') : l10n.translate('reconnect_tooltip'),
+            tooltip: _isConnected
+                ? l10n.translate('connected_tooltip')
+                : l10n.translate('reconnect_tooltip'),
           ),
         ],
       ),
@@ -874,7 +1231,7 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
                     if (!connectionSnapshot.data!) {
                       return _buildNoConnectionContent(context, l10n);
                     }
-                    
+
                     return _buildMessageList();
                   },
                 ),
@@ -891,20 +1248,19 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
                   ],
                 ),
                 padding: EdgeInsets.symmetric(
-                  horizontal: _getAdaptivePadding(16), 
-                  vertical: _getAdaptivePadding(8)
-                ),
+                    horizontal: _getAdaptivePadding(16),
+                    vertical: _getAdaptivePadding(8)),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Expanded(
                       child: Container(
-                        constraints: BoxConstraints(
-                          maxHeight: _isWindows ? 80 : 120
-                        ),
+                        constraints:
+                            BoxConstraints(maxHeight: _isWindows ? 80 : 120),
                         decoration: BoxDecoration(
                           color: theme.scaffoldBackgroundColor,
-                          borderRadius: BorderRadius.circular(_isWindows ? 16 : 24),
+                          borderRadius:
+                              BorderRadius.circular(_isWindows ? 16 : 24),
                           border: Border.all(
                             color: theme.dividerColor.withAlpha(25),
                           ),
@@ -916,14 +1272,13 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
                               child: TextField(
                                 controller: _messageController,
                                 decoration: InputDecoration(
-                                  hintText: l10n.translate('type_message'),
+                                  hintText: _messageHintText(l10n),
                                   border: InputBorder.none,
                                   contentPadding: EdgeInsets.fromLTRB(
-                                    _getAdaptivePadding(20), 
-                                    _getAdaptivePadding(10), 
-                                    _getAdaptivePadding(20), 
-                                    _getAdaptivePadding(10)
-                                  ),
+                                      _getAdaptivePadding(20),
+                                      _getAdaptivePadding(10),
+                                      _getAdaptivePadding(20),
+                                      _getAdaptivePadding(10)),
                                   hintStyle: TextStyle(
                                     color: theme.hintColor.withAlpha(153),
                                     fontSize: _getAdaptiveFontSize(14),
@@ -945,12 +1300,11 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
                             ),
                             Padding(
                               padding: EdgeInsets.only(
-                                right: _getAdaptivePadding(4), 
-                                bottom: _getAdaptivePadding(4)
-                              ),
+                                  right: _getAdaptivePadding(4),
+                                  bottom: _getAdaptivePadding(4)),
                               child: IconButton(
                                 onPressed: (_isSending || !_isConnected)
-                                    ? null 
+                                    ? null
                                     : () {
                                         final text = _messageController.text;
                                         if (text.isNotEmpty) {
@@ -960,8 +1314,10 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
                                 style: IconButton.styleFrom(
                                   backgroundColor: theme.colorScheme.primary,
                                   foregroundColor: theme.colorScheme.onPrimary,
-                                  padding: EdgeInsets.all(_getAdaptivePadding(10)),
-                                  disabledBackgroundColor: theme.colorScheme.primary.withOpacity(0.4),
+                                  padding:
+                                      EdgeInsets.all(_getAdaptivePadding(10)),
+                                  disabledBackgroundColor:
+                                      theme.colorScheme.primary.withAlpha(102),
                                 ),
                                 icon: _isSending
                                     ? SizedBox(
@@ -969,10 +1325,12 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
                                         height: _getAdaptiveIconSize(20),
                                         child: CircularProgressIndicator(
                                           strokeWidth: _isWindows ? 1.5 : 2,
-                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white.withAlpha(255)),
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                  Colors.white.withAlpha(255)),
                                         ),
                                       )
-                                    : Icon(Icons.send_rounded, 
+                                    : Icon(Icons.send_rounded,
                                         size: _getAdaptiveIconSize(24)),
                               ),
                             ),
