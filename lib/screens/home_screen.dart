@@ -10,6 +10,7 @@ import 'server_info_screen.dart';
 import 'chat_screen.dart';
 import 'online_players_screen.dart';
 import 'banned_players_screen.dart';
+import 'live_screen.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 
@@ -38,8 +39,12 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         actions: [
           IconButton(
-            icon: Icon(_isGridView ? Icons.view_list_rounded : Icons.grid_view_rounded),
-            tooltip: _isGridView ? l10n.translate('view_as_list') : l10n.translate('view_as_grid'),
+            icon: Icon(_isGridView
+                ? Icons.view_list_rounded
+                : Icons.grid_view_rounded),
+            tooltip: _isGridView
+                ? l10n.translate('view_as_list')
+                : l10n.translate('view_as_grid'),
             onPressed: () {
               setState(() {
                 _isGridView = !_isGridView;
@@ -97,19 +102,22 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisSpacing: kIsWeb || Platform.isWindows ? 12 : 24,
                 childAspectRatio: kIsWeb || Platform.isWindows ? 1.2 : 1.0,
               ),
-              itemCount: 6,
+              itemCount: 7,
               itemBuilder: (context, index) => _buildHomeItem(context, index),
             )
           : ListView.separated(
               padding: EdgeInsets.all(kIsWeb || Platform.isWindows ? 12 : 24),
-              itemCount: 6,
-              separatorBuilder: (context, i) => SizedBox(height: kIsWeb || Platform.isWindows ? 12 : 24),
-              itemBuilder: (context, index) => _buildHomeItem(context, index, isList: true),
+              itemCount: 7,
+              separatorBuilder: (context, i) =>
+                  SizedBox(height: kIsWeb || Platform.isWindows ? 12 : 24),
+              itemBuilder: (context, index) =>
+                  _buildHomeItem(context, index, isList: true),
             ),
     );
   }
 
-  Widget _buildHomeItem(BuildContext context, int index, {bool isList = false}) {
+  Widget _buildHomeItem(BuildContext context, int index,
+      {bool isList = false}) {
     switch (index) {
       case 0:
         return _buildCard(
@@ -171,6 +179,18 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           isList: isList,
         );
+      case 5:
+        return _buildCard(
+          context,
+          'live_title',
+          Icons.live_tv_rounded,
+          Colors.teal,
+          () => Navigator.push(
+            context,
+            PageTransition(child: const LiveScreen()),
+          ),
+          isList: isList,
+        );
       default:
         return _buildCard(
           context,
@@ -214,10 +234,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ? Row(
                   children: [
                     Container(
-                      padding: EdgeInsets.all(kIsWeb || Platform.isWindows ? 4 : 12),
+                      padding:
+                          EdgeInsets.all(kIsWeb || Platform.isWindows ? 4 : 12),
                       decoration: BoxDecoration(
                         color: color.withAlpha(26),
-                        borderRadius: BorderRadius.circular(kIsWeb || Platform.isWindows ? 8 : 12),
+                        borderRadius: BorderRadius.circular(
+                            kIsWeb || Platform.isWindows ? 8 : 12),
                       ),
                       child: Icon(
                         icon,
@@ -243,7 +265,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             description,
                             style: TextStyle(
                               fontSize: kIsWeb || Platform.isWindows ? 10 : 12,
-                              color: Theme.of(context).textTheme.bodySmall?.color,
+                              color:
+                                  Theme.of(context).textTheme.bodySmall?.color,
                             ),
                           ),
                         ],
@@ -256,10 +279,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      padding: EdgeInsets.all(kIsWeb || Platform.isWindows ? 4 : 12),
+                      padding:
+                          EdgeInsets.all(kIsWeb || Platform.isWindows ? 4 : 12),
                       decoration: BoxDecoration(
                         color: color.withAlpha(26),
-                        borderRadius: BorderRadius.circular(kIsWeb || Platform.isWindows ? 8 : 12),
+                        borderRadius: BorderRadius.circular(
+                            kIsWeb || Platform.isWindows ? 8 : 12),
                       ),
                       child: Icon(
                         icon,

@@ -6,6 +6,7 @@ class AppPt {
     'server_info_title': 'Informações do Servidor',
     'server_status_title': 'Status do Servidor',
     'chat_title': 'Chat',
+    'live_title': 'Live',
     'config_title': 'Configurações',
     'settings': 'Configurações',
     'login': 'Login',
@@ -17,6 +18,7 @@ class AppPt {
     'server_info_desc': 'Detalhes e status do servidor',
     'server_status_desc': 'Status atual do servidor',
     'chat_desc': 'Chat em tempo real',
+    'live_desc': 'Visão local do cliente ao vivo',
     'config_desc': 'Ajustes e preferências',
     'settings_desc': 'Ajustes e preferências',
 
@@ -89,6 +91,7 @@ class AppPt {
     'settings_saved': 'Configurações salvas com sucesso',
     'confirm': 'Confirmar',
     'cancel': 'Cancelar',
+    'back': 'Voltar',
     'logout': 'Sair',
     'logout_confirm': 'Deseja realmente sair?',
     'no_messages_in_channel': 'Nenhuma mensagem no canal ainda',
@@ -306,5 +309,19 @@ class AppPt {
     'message_error': 'Erro ao enviar mensagem',
     'send_message': 'Enviar Mensagem',
     'message_to_player': 'Mensagem para o jogador',
+
+    // Tela Live
+    'live_character': 'Personagem: {0}',
+    'live_active': 'Ao vivo',
+    'live_idle': 'Pronto',
+    'live_start': 'Iniciar Live',
+    'live_stop': 'Parar Live',
+    'live_starting': 'Iniciando live...',
+    'live_select_source': 'Nenhuma fonte ao vivo selecionada',
+    'live_select_hint':
+        'Escolha a janela do cliente Tibia ou sua tela no aviso do navegador.',
+    'live_not_supported': 'Captura ao vivo não está disponível aqui',
+    'live_web_only':
+        'Abra o monitor web no Chrome ou Edge para capturar uma janela ou tela local.',
   };
 }

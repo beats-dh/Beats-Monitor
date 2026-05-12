@@ -6,6 +6,7 @@ class AppEn {
     'server_info_title': 'Server Info',
     'server_status_title': 'Server Status',
     'chat_title': 'Chat',
+    'live_title': 'Live',
     'config_title': 'Settings',
     'login': 'Login',
     'settings': 'Settings',
@@ -21,6 +22,7 @@ class AppEn {
     'server_info_desc': 'Server details and status',
     'server_status_desc': 'Current server status',
     'chat_desc': 'Real-time chat',
+    'live_desc': 'Live local client view',
     'config_desc': 'Settings and preferences',
     'login_desc': 'Login to access the system',
     'settings_desc': 'Settings and preferences',
@@ -95,6 +97,7 @@ class AppEn {
     'settings_saved': 'Settings saved successfully',
     'confirm': 'Confirm',
     'cancel': 'Cancel',
+    'back': 'Back',
     'logout': 'Logout',
     'logout_confirm': 'Do you really want to logout?',
     'type_message': 'Your message...',
@@ -300,5 +303,19 @@ class AppEn {
     'message_error': 'Error sending message',
     'send_message': 'Send Message',
     'message_to_player': 'Message to player',
+
+    // Live Screen
+    'live_character': 'Character: {0}',
+    'live_active': 'Live',
+    'live_idle': 'Ready',
+    'live_start': 'Start Live View',
+    'live_stop': 'Stop Live View',
+    'live_starting': 'Starting live view...',
+    'live_select_source': 'No live source selected',
+    'live_select_hint':
+        'Choose the Tibia client window or your screen in the browser prompt.',
+    'live_not_supported': 'Live capture is not available here',
+    'live_web_only':
+        'Open the web monitor in Chrome or Edge to capture a local window or screen.',
   };
 }
