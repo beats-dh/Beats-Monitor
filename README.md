@@ -78,7 +78,7 @@ flutter build apk --release           # Android APK
 flutter build appbundle --release     # Android App Bundle
 flutter build ios --release           # iOS
 flutter build windows --release       # Windows
-flutter build web --release           # Web
+flutter build web --release --base-href /beats-monitor/ --no-wasm-dry-run  # Production web
 ```
 
 ## Configuration
