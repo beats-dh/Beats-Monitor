@@ -292,6 +292,7 @@ class AppEn {
     'paladin': 'Paladin',
     'sorcerer': 'Sorcerer',
     'druid': 'Druid',
+    'monk': 'Monk',
     'none': 'None',
 
     // Player Actions

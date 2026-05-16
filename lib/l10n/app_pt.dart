@@ -298,6 +298,7 @@ class AppPt {
     'paladin': 'Paladin',
     'sorcerer': 'Sorcerer',
     'druid': 'Druid',
+    'monk': 'Monk',
     'none': 'Nenhuma',
 
     // Ações de Jogador

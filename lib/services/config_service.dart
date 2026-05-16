@@ -6,9 +6,12 @@ class ConfigService extends ChangeNotifier {
   static const String _baseUrlKey = 'base_url';
   static const String _autoReconnectKey = 'auto_reconnect';
   static const String _reconnectAttemptsKey = 'reconnect_attempts';
-  static const String _defaultWebBaseUrl = '/beats-monitor-api';
+  static const String _defaultWebBaseUrl = String.fromEnvironment(
+    'BEATS_MONITOR_DEFAULT_BASE_URL',
+    defaultValue: '/beats-monitor-api',
+  );
   static const String _defaultNativeBaseUrl = '127.0.0.1:51842';
-  
+
   String _baseUrl = kIsWeb ? _defaultWebBaseUrl : _defaultNativeBaseUrl;
   bool _autoReconnect = true;
   int _reconnectAttempts = 5;
@@ -16,12 +19,13 @@ class ConfigService extends ChangeNotifier {
   String get baseUrl => _baseUrl;
   String get apiBaseUrl => _buildHttpBaseUrl(_baseUrl);
   String get wsBaseUrl => _buildWebSocketBaseUrl(_baseUrl);
-  String get defaultBaseUrl => kIsWeb ? _defaultWebBaseUrl : _defaultNativeBaseUrl;
+  String get defaultBaseUrl =>
+      kIsWeb ? _defaultWebBaseUrl : _defaultNativeBaseUrl;
   bool get autoReconnect => _autoReconnect;
   int get reconnectAttempts => _reconnectAttempts;
 
   static final ConfigService _instance = ConfigService._internal();
-  
+
   factory ConfigService() {
     return _instance;
   }
