@@ -15,7 +15,7 @@ const {
 
 const waldir = { subject: "wmshuee@gmail.com", account_id: 8, player: "Waldir" };
 
-test("private history only includes messages involving the authenticated monitor player", () => {
+test("private history includes all private messages for the monitor", () => {
   assert.equal(
     privateRowVisibleToIdentity({ player_name: "Waldir", message: "to Tankso: test" }, waldir),
     true
@@ -26,11 +26,11 @@ test("private history only includes messages involving the authenticated monitor
   );
   assert.equal(
     privateRowVisibleToIdentity({ player_name: "Tankso", message: "to Another: hidden" }, waldir),
-    false
+    true
   );
   assert.equal(
     privateRowVisibleToIdentity({ player_name: "Tankso", message: "to Waldirx: hidden" }, waldir),
-    false
+    true
   );
   assert.equal(
     privateRowVisibleToIdentity({ player_name: "Tankso", message: "to Waldir: answer" }, {}),
@@ -38,13 +38,13 @@ test("private history only includes messages involving the authenticated monitor
   );
 });
 
-test("private history query scopes chat_private to the monitor player", () => {
+test("private history query includes the full private channel", () => {
   const whereSql = chatHistoryWhereSql(["chat_global", "chat_private"], waldir);
 
   assert.match(whereSql, /channel_key IN \('chat_global'\)/);
   assert.match(whereSql, /channel_key = 'chat_private'/);
-  assert.match(whereSql, /player_name = 'Waldir'/);
-  assert.match(whereSql, /message LIKE 'to Waldir:%'/);
+  assert.doesNotMatch(whereSql, /player_name = 'Waldir'/);
+  assert.doesNotMatch(whereSql, /message LIKE 'to Waldir:%'/);
 });
 
 test("private send command is queued as the authenticated monitor player", () => {

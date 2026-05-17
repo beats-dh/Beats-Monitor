@@ -36,6 +36,7 @@ class _ChatScreenState extends State<ChatScreen>
   List<Map<String, dynamic>> _broadcastHistory = [];
   String? _selectedPrivatePeer;
   static const String _monitorPlayerName = 'Waldir';
+  static const String _allPrivateMessagesLabel = 'All';
 
   // Verifica se está no Windows
   bool get _isWindows => !kIsWeb && Platform.isWindows;
@@ -235,6 +236,39 @@ class _ChatScreenState extends State<ChatScreen>
   bool _sameName(String left, String right) =>
       _normalizeName(left) == _normalizeName(right);
 
+  String _privateConversationKey(String left, String right) {
+    final names = [_normalizeName(left), _normalizeName(right)]..sort();
+    return names.join('|');
+  }
+
+  String _privateConversationLabel(String left, String right) {
+    final names = [left.trim(), right.trim()]
+      ..sort((a, b) => _normalizeName(a).compareTo(_normalizeName(b)));
+    return '${names.first} <-> ${names.last}';
+  }
+
+  String? _privateReplyTargetForSelection(String? selectedPeer) {
+    if (selectedPeer == null ||
+        selectedPeer.isEmpty ||
+        selectedPeer == _allPrivateMessagesLabel) {
+      return null;
+    }
+
+    final parts = selectedPeer.split(' <-> ');
+    if (parts.length != 2) {
+      return selectedPeer;
+    }
+
+    if (_sameName(parts.first, _monitorPlayerName)) {
+      return parts.last;
+    }
+    if (_sameName(parts.last, _monitorPlayerName)) {
+      return parts.first;
+    }
+
+    return null;
+  }
+
   Map<String, String>? _parsePrivateEnvelope(ChatMessage message) {
     if (message.channel != 'chat_private') {
       return null;
@@ -247,13 +281,12 @@ class _ChatScreenState extends State<ChatScreen>
     if (toMatch != null) {
       final target = toMatch.group(1)!.trim();
       final body = toMatch.group(2)!.trimLeft();
-      if (_sameName(sender, _monitorPlayerName)) {
-        return {'peer': target, 'body': body, 'direction': 'out'};
-      }
-      if (_sameName(target, _monitorPlayerName)) {
-        return {'peer': sender, 'body': body, 'direction': 'in'};
-      }
-      return null;
+      return {
+        'key': _privateConversationKey(sender, target),
+        'peer': _privateConversationLabel(sender, target),
+        'body': body,
+        'direction': _sameName(sender, _monitorPlayerName) ? 'out' : 'in',
+      };
     }
 
     final legacyMatch =
@@ -263,12 +296,12 @@ class _ChatScreenState extends State<ChatScreen>
       final from = legacyMatch.group(1)!.trim();
       final target = legacyMatch.group(2)!.trim();
       final body = legacyMatch.group(3)!.trimLeft();
-      if (_sameName(from, _monitorPlayerName)) {
-        return {'peer': target, 'body': body, 'direction': 'out'};
-      }
-      if (_sameName(target, _monitorPlayerName)) {
-        return {'peer': from, 'body': body, 'direction': 'in'};
-      }
+      return {
+        'key': _privateConversationKey(from, target),
+        'peer': _privateConversationLabel(from, target),
+        'body': body,
+        'direction': _sameName(from, _monitorPlayerName) ? 'out' : 'in',
+      };
     }
 
     return null;
@@ -286,7 +319,7 @@ class _ChatScreenState extends State<ChatScreen>
         continue;
       }
       final peer = envelope['peer']!;
-      final key = _normalizeName(peer);
+      final key = envelope['key'] ?? _normalizeName(peer);
       labelByKey[key] = peer;
       final current = latestByPeer[key];
       if (current == null || message.timestamp.isAfter(current)) {
@@ -297,13 +330,20 @@ class _ChatScreenState extends State<ChatScreen>
     final keys = latestByPeer.keys.toList()
       ..sort(
           (left, right) => latestByPeer[right]!.compareTo(latestByPeer[left]!));
-    return keys.map((key) => labelByKey[key]!).toList();
+    final peers = keys.map((key) => labelByKey[key]!).toList();
+    return peers.isEmpty ? peers : [_allPrivateMessagesLabel, ...peers];
   }
 
   List<ChatMessage> _privateMessagesFor(String peer) {
+    if (peer == _allPrivateMessagesLabel) {
+      return _messages
+          .where((message) => message.channel == 'chat_private')
+          .toList();
+    }
+
     return _messages.where((message) {
       final envelope = _parsePrivateEnvelope(message);
-      return envelope != null && _sameName(envelope['peer']!, peer);
+      return envelope != null && envelope['peer'] == peer;
     }).toList();
   }
 
@@ -320,11 +360,11 @@ class _ChatScreenState extends State<ChatScreen>
       return l10n.translate('type_god_command');
     }
     if (_selectedChannel == 'private') {
-      final peer = _selectedPrivatePeer;
-      if (peer != null && peer.isNotEmpty) {
+      final replyTarget = _privateReplyTargetForSelection(_selectedPrivatePeer);
+      if (replyTarget != null && replyTarget.isNotEmpty) {
         return l10n
             .translate('type_private_message_to')
-            .replaceAll('{0}', peer);
+            .replaceAll('{0}', replyTarget);
       }
       return l10n.translate('private_message_format');
     }
@@ -419,11 +459,10 @@ class _ChatScreenState extends State<ChatScreen>
       setState(() => _isSending = true);
       dynamic response;
       if (_selectedChannel == 'private') {
-        final peers = _privatePeers();
-        final selectedPeer =
-            _selectedPrivatePeer ?? (peers.isNotEmpty ? peers.first : null);
-        final parsed = selectedPeer != null && selectedPeer.isNotEmpty
-            ? {'target': selectedPeer, 'message': text.trim()}
+        final replyTarget =
+            _privateReplyTargetForSelection(_selectedPrivatePeer);
+        final parsed = replyTarget != null && replyTarget.isNotEmpty
+            ? {'target': replyTarget, 'message': text.trim()}
             : _parsePrivateMessage(text);
         if (parsed == null) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -440,7 +479,10 @@ class _ChatScreenState extends State<ChatScreen>
           "target": parsed['target'],
           "message": parsed['message'],
         });
-        _selectedPrivatePeer = parsed['target'];
+        if (replyTarget == null) {
+          _selectedPrivatePeer =
+              _privateConversationLabel(_monitorPlayerName, parsed['target']!);
+        }
       } else {
         response = await ApiService.post('server/chat-message', body: {
           "channel": "chat_$_selectedChannel",
@@ -902,7 +944,10 @@ class _ChatScreenState extends State<ChatScreen>
       );
     }
 
-    final selected = _selectedPrivatePeer ?? peers.first;
+    final selected =
+        _selectedPrivatePeer != null && peers.contains(_selectedPrivatePeer)
+            ? _selectedPrivatePeer!
+            : peers.first;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.symmetric(
@@ -939,7 +984,9 @@ class _ChatScreenState extends State<ChatScreen>
   Widget _buildPrivateMessageList() {
     final peers = _privatePeers();
     final selectedPeer =
-        _selectedPrivatePeer ?? (peers.isNotEmpty ? peers.first : null);
+        _selectedPrivatePeer != null && peers.contains(_selectedPrivatePeer)
+            ? _selectedPrivatePeer
+            : (peers.isNotEmpty ? peers.first : null);
     final messages = selectedPeer == null
         ? <ChatMessage>[]
         : _privateMessagesFor(selectedPeer);

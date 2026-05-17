@@ -640,18 +640,7 @@ function monitorPrivatePlayerName(identity) {
 }
 
 function privateRowVisibleToIdentity(row, identity) {
-  const playerName = monitorPrivatePlayerName(identity);
-  if (!playerName) {
-    return false;
-  }
-
-  const rowPlayer = String(row.player_name || "").trim().toLowerCase();
-  const monitorPlayer = playerName.toLowerCase();
-  if (rowPlayer === monitorPlayer) {
-    return true;
-  }
-
-  return String(row.message || "").trimStart().toLowerCase().startsWith(`to ${monitorPlayer}:`);
+  return row.channel_key === "chat_private";
 }
 
 function chatHistoryWhereSql(channels, identity) {
@@ -668,12 +657,7 @@ function chatHistoryWhereSql(channels, identity) {
   }
 
   if (selected.includes("chat_private")) {
-    const playerName = monitorPrivatePlayerName(identity);
-    if (playerName) {
-      const safePlayer = sqlString(playerName);
-      const safePrefix = sqlLikeString(`to ${playerName}:`);
-      clauses.push(`(channel_key = 'chat_private' AND (player_name = '${safePlayer}' OR message LIKE '${safePrefix}%' ESCAPE '\\\\'))`);
-    }
+    clauses.push("channel_key = 'chat_private'");
   }
 
   return clauses.length ? `WHERE ${clauses.join(" OR ")}` : "";
@@ -700,7 +684,8 @@ function queryChatRows(whereSql, limit) {
 
   try {
     return mysqlQuery(sql, fields);
-  } catch {
+  } catch (error) {
+    console.error("[penultima-monitor-api] chat history query failed:", error.message);
     return [];
   }
 }
@@ -758,7 +743,8 @@ function pollChatMessages() {
   let rows = [];
   try {
     rows = mysqlQuery(sql, fields);
-  } catch {
+  } catch (error) {
+    console.error("[penultima-monitor-api] chat poll query failed:", error.message);
     return;
   }
 
