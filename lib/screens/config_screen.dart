@@ -1,8 +1,10 @@
 import 'dart:io';
 import 'package:beats_monitor/l10n/app_localizations.dart';
 import 'package:beats_monitor/services/download_service.dart';
+import 'package:beats_monitor/services/monitor_notification_service.dart';
 import 'package:beats_monitor/services/platform_service.dart';
 import 'package:beats_monitor/services/update_service.dart';
+import 'package:beats_monitor/services/web_app_install_service.dart';
 import 'package:beats_monitor/services/websocket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -22,9 +24,11 @@ class _ConfigScreenState extends State<ConfigScreen> {
   bool _isLoading = false;
   bool _autoReconnect = true;
   bool _showNotifications = true;
+  String _notificationPermission = MonitorNotificationService.permission;
   int _reconnectAttempts = 5;
   bool _initialized = false;
   bool _checkingUpdate = false;
+  bool _installingWebApp = false;
 
   @override
   void initState() {
@@ -33,20 +37,84 @@ class _ConfigScreenState extends State<ConfigScreen> {
     UpdateService.instance.init();
     DownloadService.cleanOldUpdates(); // Limpa APKs antigos
     _checkForUpdates();
+    _loadNotificationSettings();
+  }
+
+  Future<void> _loadNotificationSettings() async {
+    await MonitorNotificationService.initialize();
+    if (!mounted) return;
+
+    setState(() {
+      _showNotifications = MonitorNotificationService.enabled &&
+          MonitorNotificationService.isSupported;
+      _notificationPermission = MonitorNotificationService.permission;
+    });
+  }
+
+  Future<void> _setNotificationsEnabled(bool value) async {
+    final l10n = AppLocalizations.of(context);
+    if (!value) {
+      await MonitorNotificationService.setEnabled(false);
+      if (!mounted) return;
+      setState(() {
+        _showNotifications = false;
+        _notificationPermission = MonitorNotificationService.permission;
+      });
+      return;
+    }
+
+    final enabled = await MonitorNotificationService.enableWithPermission();
+    if (!mounted) return;
+
+    setState(() {
+      _showNotifications = enabled;
+      _notificationPermission = MonitorNotificationService.permission;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(l10n.translate(enabled
+            ? 'notification_permission_granted'
+            : MonitorNotificationService.isSupported
+                ? 'notification_permission_denied'
+                : 'notification_permission_unsupported')),
+        backgroundColor: enabled ? Colors.green : Colors.orange,
+      ),
+    );
+  }
+
+  Future<void> _installWebApp() async {
+    final l10n = AppLocalizations.of(context);
+    setState(() => _installingWebApp = true);
+
+    final installed = await WebAppInstallService.promptInstall();
+    if (!mounted) return;
+
+    setState(() => _installingWebApp = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(l10n.translate(installed
+            ? 'web_install_started'
+            : WebAppInstallService.canInstall
+                ? 'web_install_dismissed'
+                : 'web_install_unavailable')),
+        backgroundColor: installed ? Colors.green : Colors.orange,
+      ),
+    );
   }
 
   Future<void> _checkForUpdates() async {
     if (!mounted) return;
-    
+
     setState(() => _checkingUpdate = true);
 
     try {
       final updateInfo = await UpdateService.instance.checkForUpdates();
-      
+
       if (!mounted) return;
       final currentContext = context;
       final l10n = AppLocalizations.of(currentContext);
-      
+
       if (updateInfo == null) {
         ScaffoldMessenger.of(currentContext).showSnackBar(
           SnackBar(
@@ -95,7 +163,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
 
         if (!mounted || shouldRequest != true) return;
 
-        final permissionStatus = await Permission.requestInstallPackages.request();
+        final permissionStatus =
+            await Permission.requestInstallPackages.request();
         if (!mounted || !permissionStatus.isGranted) return;
       }
     }
@@ -155,7 +224,10 @@ class _ConfigScreenState extends State<ConfigScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Theme.of(dialogContext).colorScheme.surfaceContainerHighest.withAlpha(77),
+                      color: Theme.of(dialogContext)
+                          .colorScheme
+                          .surfaceContainerHighest
+                          .withAlpha(77),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(updateInfo.changelog),
@@ -165,7 +237,9 @@ class _ConfigScreenState extends State<ConfigScreen> {
             ),
             actions: [
               TextButton(
-                onPressed: updateInfo.required ? null : () => Navigator.pop(dialogContext, false),
+                onPressed: updateInfo.required
+                    ? null
+                    : () => Navigator.pop(dialogContext, false),
                 child: Text(l10n.translate('later')),
               ),
               FilledButton(
@@ -220,14 +294,14 @@ class _ConfigScreenState extends State<ConfigScreen> {
     try {
       final config = context.read<ConfigService>();
       final webSocket = context.read<WebSocketService>();
-      
+
       await config.setBaseUrl(_baseUrlController.text.trim());
       await config.setAutoReconnect(_autoReconnect);
       await config.setReconnectAttempts(_reconnectAttempts);
-      
+
       await webSocket.closeCurrentConnection();
       await webSocket.reconnectManually();
-      
+
       if (mounted) {
         Navigator.of(context).pop(true);
       }
@@ -275,7 +349,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
     final theme = Theme.of(context);
     final themeProvider = context.watch<ThemeProvider>();
     final l10n = AppLocalizations.of(context);
-    
+
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.translate('config_title')),
@@ -332,7 +406,9 @@ class _ConfigScreenState extends State<ConfigScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        l10n.translate('max_reconnect_attempts').replaceAll('{0}', _reconnectAttempts.toString()),
+                        l10n
+                            .translate('max_reconnect_attempts')
+                            .replaceAll('{0}', _reconnectAttempts.toString()),
                         style: theme.textTheme.bodySmall,
                       ),
                       Slider(
@@ -341,9 +417,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
                         max: 10,
                         divisions: 9,
                         label: _reconnectAttempts.toString(),
-                        onChanged: (value) => setState(() => 
-                          _reconnectAttempts = value.round()
-                        ),
+                        onChanged: (value) =>
+                            setState(() => _reconnectAttempts = value.round()),
                       ),
                     ],
                   ),
@@ -361,12 +436,34 @@ class _ConfigScreenState extends State<ConfigScreen> {
               SwitchListTile(
                 title: Text(l10n.translate('system_notifications')),
                 subtitle: Text(
-                  l10n.translate('system_notifications_desc'),
+                  '${l10n.translate('system_notifications_desc')}\n${l10n.translate('notification_permission')}: $_notificationPermission',
                   style: theme.textTheme.bodySmall,
                 ),
                 value: _showNotifications,
-                onChanged: (value) => setState(() => _showNotifications = value),
+                onChanged: _setNotificationsEnabled,
               ),
+              if (WebAppInstallService.isSupported) ...[
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.install_desktop),
+                  title: Text(l10n.translate('web_install_title')),
+                  subtitle: Text(
+                    l10n.translate('web_install_desc'),
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  trailing: FilledButton.icon(
+                    onPressed: _installingWebApp ? null : _installWebApp,
+                    icon: _installingWebApp
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.download_for_offline),
+                    label: Text(l10n.translate('web_install_button')),
+                  ),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 16),
@@ -380,36 +477,40 @@ class _ConfigScreenState extends State<ConfigScreen> {
                 title: Text(l10n.translate('version')),
                 subtitle: Text(UpdateService.instance.currentVersion),
                 trailing: IconButton(
-                  icon: _checkingUpdate 
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.system_update),
-                  onPressed: _checkingUpdate ? null : () async {
-                    setState(() => _checkingUpdate = true);
-                    try {
-                      final updateInfo = await UpdateService.instance.checkForUpdates();
-                      
-                      if (!mounted) return;
-                      
-                      if (updateInfo == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(l10n.translate('latest_version')),
-                          ),
-                        );
-                        return;
-                      }
+                  icon: _checkingUpdate
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.system_update),
+                  onPressed: _checkingUpdate
+                      ? null
+                      : () async {
+                          setState(() => _checkingUpdate = true);
+                          try {
+                            final updateInfo =
+                                await UpdateService.instance.checkForUpdates();
 
-                      await _showUpdateDialog(context, updateInfo.url);
-                    } finally {
-                      if (mounted) {
-                        setState(() => _checkingUpdate = false);
-                      }
-                    }
-                  },
+                            if (!mounted) return;
+
+                            if (updateInfo == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content:
+                                      Text(l10n.translate('latest_version')),
+                                ),
+                              );
+                              return;
+                            }
+
+                            await _showUpdateDialog(context, updateInfo.url);
+                          } finally {
+                            if (mounted) {
+                              setState(() => _checkingUpdate = false);
+                            }
+                          }
+                        },
                 ),
               ),
               const Divider(),
@@ -434,16 +535,16 @@ class _ConfigScreenState extends State<ConfigScreen> {
           // Botão Salvar
           FilledButton.icon(
             onPressed: _isLoading ? null : _saveConfig,
-            icon: _isLoading 
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : const Icon(Icons.save),
+            icon: _isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Icon(Icons.save),
             label: Text(l10n.translate('save_changes')),
           ),
           if (!_isLoading) ...[
@@ -498,7 +599,9 @@ class _DownloadDialogState extends State<_DownloadDialog> {
             if (!mounted) return;
             setState(() {
               _progress = received / total;
-              _status = l10n.translate('downloading').replaceAll('{0}', (_progress * 100).toStringAsFixed(1));
+              _status = l10n
+                  .translate('downloading')
+                  .replaceAll('{0}', (_progress * 100).toStringAsFixed(1));
             });
           }
         },
@@ -521,13 +624,13 @@ class _DownloadDialogState extends State<_DownloadDialog> {
         final file = File(filePath);
         if (await file.exists()) {
           if (!mounted) return;
-          
+
           setState(() => _status = l10n.translate('starting_installation'));
-          
+
           try {
             final success = await PlatformService.installApk(filePath);
             if (!mounted) return;
-            
+
             if (success) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text(l10n.translate('installation_started'))),
@@ -562,7 +665,9 @@ class _DownloadDialogState extends State<_DownloadDialog> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return AlertDialog(
-      title: Text(_error ? l10n.translate('error') : l10n.translate('downloading_update')),
+      title: Text(_error
+          ? l10n.translate('error')
+          : l10n.translate('downloading_update')),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -577,7 +682,8 @@ class _DownloadDialogState extends State<_DownloadDialog> {
         if (!widget.required || _error)
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text(_error ? l10n.translate('close') : l10n.translate('cancel')),
+            child: Text(
+                _error ? l10n.translate('close') : l10n.translate('cancel')),
           ),
       ],
     );

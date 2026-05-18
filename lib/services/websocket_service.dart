@@ -8,6 +8,7 @@ import '../models/events.dart';
 import '../models/websocket_events.dart';
 import '../services/auth_service.dart';
 import '../services/config_service.dart';
+import '../services/monitor_notification_service.dart';
 
 class WebSocketService extends ChangeNotifier {
   WebSocketChannel? _channel;
@@ -27,7 +28,7 @@ class WebSocketService extends ChangeNotifier {
   static const _maxReconnectDelay = Duration(seconds: 10);
   static const _pingInterval = Duration(seconds: 30);
   static const _connectionCheckInterval = Duration(seconds: 15);
-  
+
   final List<String> _serverAddresses = [];
   int _currentAddressIndex = 0;
   final ConfigService _config;
@@ -36,7 +37,7 @@ class WebSocketService extends ChangeNotifier {
   final _serverStatusController = StreamController<ServerStatus>.broadcast();
   final _chatMessageController = StreamController<ChatMessage>.broadcast();
   final _connectionStatusController = StreamController<bool>.broadcast();
-  
+
   // Lista de eventos inscritos
   final Set<String> _subscribedEvents = {};
 
@@ -50,12 +51,13 @@ class WebSocketService extends ChangeNotifier {
   bool get autoReconnect => _config.autoReconnect;
 
   WebSocketService(this._config) {
+    unawaited(MonitorNotificationService.initialize());
     _connectionStatusController.add(false);
     _isConnected = false;
-    
+
     // Inicia o timer de verificação de conexão
     _startConnectionCheckTimer();
-    
+
     notifyListeners();
   }
 
@@ -85,16 +87,16 @@ class WebSocketService extends ChangeNotifier {
       _connectionStatusController.add(false);
       notifyListeners();
     }
-    
+
     _firstMessageTimer?.cancel();
     _firstMessageTimer = null;
     _pingTimer?.cancel();
     _pingTimer = null;
-    
+
     try {
       await _subscription?.cancel();
       _subscription = null;
-      
+
       if (_channel != null) {
         try {
           await Future.value(_channel?.sink.close(1000))
@@ -117,8 +119,9 @@ class WebSocketService extends ChangeNotifier {
     if (_disposed) return;
 
     closeCurrentConnection();
-    
-    if (_reconnectAttempts >= _config.reconnectAttempts && _config.autoReconnect) {
+
+    if (_reconnectAttempts >= _config.reconnectAttempts &&
+        _config.autoReconnect) {
       manualReconnectMode = true;
       _reconnectAttempts = 0;
       _currentAddressIndex = 0;
@@ -133,13 +136,13 @@ class WebSocketService extends ChangeNotifier {
 
     _reconnectAttempts++;
     _reconnectTimer?.cancel();
-    
+
     final baseDelay = _baseReconnectDelay.inMilliseconds;
     final maxDelay = _maxReconnectDelay.inMilliseconds;
-    final delay = Duration(milliseconds: 
-      math.min(baseDelay + (_reconnectAttempts - 1) * 1000, maxDelay)
-    );
-    
+    final delay = Duration(
+        milliseconds:
+            math.min(baseDelay + (_reconnectAttempts - 1) * 1000, maxDelay));
+
     _reconnectTimer = Timer(delay, () {
       if (!_disposed && !manualReconnectMode) {
         _connect();
@@ -149,7 +152,7 @@ class WebSocketService extends ChangeNotifier {
 
   Future<void> reconnectManually() async {
     if (_disposed) return;
-    
+
     manualReconnectMode = false;
     _reconnectAttempts = 0;
     _currentAddressIndex = 0;
@@ -160,19 +163,19 @@ class WebSocketService extends ChangeNotifier {
     try {
       final type = jsonData['type'] as String?;
       _log('Processando mensagem do tipo: $type');
-      
+
       switch (type) {
         case 'subscribed':
           _log('Inscrito nos eventos com sucesso');
           return;
-          
+
         case 'pong':
           return;
 
         case 'event':
           final eventType = jsonData['event'] as String?;
           _log('Evento recebido: $eventType');
-          
+
           if (!_subscribedEvents.contains(eventType)) {
             _log('Evento $eventType recebido mas não inscrito, ignorando');
             return;
@@ -180,14 +183,14 @@ class WebSocketService extends ChangeNotifier {
 
           // Verifica se data existe e é um Map, caso contrário, cria um Map vazio
           final data = jsonData['data'];
-          
+
           if (eventType == WebSocketEvents.chatHistory) {
             // Tratamento seguro para o caso de data ser null ou não ser um Map
             if (data == null) {
               _log('Histórico de chat vazio ou em formato inválido');
               return;
             }
-            
+
             try {
               if (data is Map<String, dynamic>) {
                 // Processa cada canal
@@ -208,9 +211,11 @@ class WebSocketService extends ChangeNotifier {
                 });
               } else if (data is List) {
                 // Alguns servidores podem enviar uma lista direta de mensagens
-                _log('Histórico recebido como lista com ${data.length} mensagens');
+                _log(
+                    'Histórico recebido como lista com ${data.length} mensagens');
                 for (final msgData in data) {
-                  if (msgData is Map<String, dynamic> && msgData.containsKey('channel')) {
+                  if (msgData is Map<String, dynamic> &&
+                      msgData.containsKey('channel')) {
                     final message = ChatMessage.fromJson(msgData);
                     _chatMessageController.add(message);
                   }
@@ -223,7 +228,7 @@ class WebSocketService extends ChangeNotifier {
             }
             return;
           }
-          
+
           // Para outros eventos, certifica-se que data é Map<String, dynamic>
           Map<String, dynamic> eventData;
           if (data is Map<String, dynamic>) {
@@ -232,7 +237,7 @@ class WebSocketService extends ChangeNotifier {
             _log('Formato de dados inválido para evento $eventType');
             return;
           }
-          
+
           switch (eventType) {
             case WebSocketEvents.chatLocal:
             case WebSocketEvents.chatGlobal:
@@ -244,24 +249,25 @@ class WebSocketService extends ChangeNotifier {
                 'channel': eventType,
               });
               _chatMessageController.add(message);
+              MonitorNotificationService.notifyForChatMessage(message);
               break;
-              
+
             case WebSocketEvents.systemResources:
               final systemData = SystemData.fromJson({'data': eventData});
               _systemDataController.add(systemData);
               break;
-              
+
             case WebSocketEvents.serverStatus:
               final serverStatus = ServerStatus.fromJson(eventData);
               _serverStatusController.add(serverStatus);
               break;
           }
           break;
-          
+
         case 'error':
           _log('Erro do servidor: ${jsonData['message']}');
           break;
-          
+
         default:
           if (jsonData.containsKey('cpu') || jsonData.containsKey('system')) {
             final systemData = SystemData.fromJson({'data': jsonData});
@@ -278,7 +284,7 @@ class WebSocketService extends ChangeNotifier {
       // Decodifica a mensagem recebida como UTF-8
       final bytes = utf8.encode(message);
       final decodedMessage = utf8.decode(bytes, allowMalformed: true);
-      
+
       final jsonData = jsonDecode(decodedMessage) as Map<String, dynamic>;
       _processMessage(jsonData);
     } catch (e) {
@@ -292,7 +298,7 @@ class WebSocketService extends ChangeNotifier {
     }
 
     if (_channel == null || _disposed) return;
-    
+
     try {
       _channel?.sink.add(jsonEncode({
         'type': 'subscribe',
@@ -308,7 +314,7 @@ class WebSocketService extends ChangeNotifier {
 
   void unsubscribe([List<String>? events]) {
     if (_channel == null || _disposed) return;
-    
+
     try {
       if (events != null) {
         _subscribedEvents.removeAll(events);
@@ -321,7 +327,6 @@ class WebSocketService extends ChangeNotifier {
         'events': events ?? [],
         'token': AuthService.token
       }));
-
     } catch (e) {
       _log('Erro ao cancelar inscrição: $e');
     }
@@ -332,9 +337,7 @@ class WebSocketService extends ChangeNotifier {
     _pingTimer = Timer.periodic(_pingInterval, (_) {
       if (_channel != null && !_disposed) {
         try {
-          _channel?.sink.add(jsonEncode({
-            'type': 'ping'
-          }));
+          _channel?.sink.add(jsonEncode({'type': 'ping'}));
         } catch (e) {
           _log('Erro ao enviar ping: $e');
         }
@@ -360,7 +363,8 @@ class WebSocketService extends ChangeNotifier {
         _currentAddressIndex = 0;
       }
 
-      if (_reconnectAttempts >= _config.reconnectAttempts && _config.autoReconnect) {
+      if (_reconnectAttempts >= _config.reconnectAttempts &&
+          _config.autoReconnect) {
         manualReconnectMode = true;
         _reconnectAttempts = 0;
         _currentAddressIndex = 0;
@@ -396,10 +400,10 @@ class WebSocketService extends ChangeNotifier {
 
       try {
         _channel = await Future.value(WebSocketChannel.connect(uri))
-          .timeout(const Duration(seconds: 5));
+            .timeout(const Duration(seconds: 5));
 
         var receivedFirstMessage = false;
-        
+
         _firstMessageTimer = Timer(_connectionTimeout, () {
           if (!receivedFirstMessage && _channel != null && !_disposed) {
             scheduleReconnect('Sem dados iniciais');
@@ -411,7 +415,7 @@ class WebSocketService extends ChangeNotifier {
             if (!receivedFirstMessage) {
               receivedFirstMessage = true;
               _firstMessageTimer?.cancel();
-              
+
               // Marca como conectado assim que receber a primeira mensagem
               if (!_isConnected && !_disposed) {
                 _isConnected = true;
@@ -439,7 +443,7 @@ class WebSocketService extends ChangeNotifier {
         );
 
         _currentAddressIndex = 0;
-        
+
         // Marca como conectado, mas verifica novamente quando receber a primeira mensagem
         if (!_disposed) {
           _isConnected = true;
@@ -449,7 +453,6 @@ class WebSocketService extends ChangeNotifier {
 
         _startPingTimer();
         subscribe(_subscribedEvents.toList());
-
       } catch (e) {
         scheduleReconnect('Falha na conexão: $e');
       }
@@ -469,7 +472,7 @@ class WebSocketService extends ChangeNotifier {
       }
     } else {
       _log('Tentativa de enviar mensagem sem conexão ativa');
-      
+
       // Tenta reconectar automaticamente
       if (!_isConnecting && !_isStartingConnection && !manualReconnectMode) {
         _log('Tentando reconectar automaticamente...');

@@ -248,7 +248,22 @@ class AppPt {
         'Tentar reconectar automaticamente quando perder conexão',
     'notifications': 'Notificações',
     'system_notifications': 'Notificações do Sistema',
-    'system_notifications_desc': 'Receber alertas sobre o estado do servidor',
+    'system_notifications_desc':
+        'Avisar quando o Help Channel receber mensagem ou uma private for enviada para Waldir',
+    'notification_permission': 'Permissão',
+    'notification_permission_granted': 'Notificações de chat ativadas.',
+    'notification_permission_denied':
+        'As notificações do navegador não foram permitidas.',
+    'notification_permission_unsupported':
+        'Esta plataforma não suporta notificações do navegador.',
+    'web_install_title': 'Instalar app',
+    'web_install_desc':
+        'Instale o Penultima Monitor neste dispositivo para acesso rápido e notificações do navegador.',
+    'web_install_button': 'Instalar',
+    'web_install_started': 'Aviso de instalação aberto.',
+    'web_install_dismissed': 'Instalação cancelada.',
+    'web_install_unavailable':
+        'O aviso de instalação do navegador ainda não está disponível. Use Chrome ou Edge pela barra de endereço se aparecer.',
     'about': 'Sobre',
     'latest_version': 'Você está usando a versão mais recente',
     'developed_by': 'Desenvolvido por',

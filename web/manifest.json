@@ -2,11 +2,14 @@
     "name": "Penultima Monitor",
     "short_name": "Penultima",
     "start_url": ".",
+    "scope": ".",
     "display": "standalone",
+    "display_override": ["standalone", "window-controls-overlay", "minimal-ui"],
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Real-time Penultima server monitor with chat alerts.",
     "orientation": "portrait-primary",
+    "categories": ["utilities", "productivity"],
     "prefer_related_applications": false,
     "icons": [
         {

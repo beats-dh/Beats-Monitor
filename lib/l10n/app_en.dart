@@ -238,7 +238,21 @@ class AppEn {
         'Try to reconnect automatically when connection is lost',
     'notifications': 'Notifications',
     'system_notifications': 'System Notifications',
-    'system_notifications_desc': 'Receive alerts about server status',
+    'system_notifications_desc':
+        'Notify when Help Channel receives a message or a private message is sent to Waldir',
+    'notification_permission': 'Permission',
+    'notification_permission_granted': 'Chat notifications are enabled.',
+    'notification_permission_denied': 'Browser notifications were not allowed.',
+    'notification_permission_unsupported':
+        'This platform does not support browser notifications.',
+    'web_install_title': 'Install app',
+    'web_install_desc':
+        'Install Penultima Monitor on this device for faster access and browser notifications.',
+    'web_install_button': 'Install',
+    'web_install_started': 'App installation prompt opened.',
+    'web_install_dismissed': 'Installation was dismissed.',
+    'web_install_unavailable':
+        'The browser install prompt is not available yet. Use Chrome or Edge install from the address bar if it appears.',
     'about': 'About',
     'latest_version': 'You are using the latest version',
     'developed_by': 'Developed by',
