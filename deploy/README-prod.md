@@ -64,6 +64,9 @@ reads local chat, World/English chat, trade, help, and private messages.
 Outgoing monitor chat is queued in `beats_monitor_commands`. Keep
 `BEATS_MONITOR_ALLOW_CHAT_SEND=false` unless the game server build containing the
 command consumer has been deployed and the game process has restarted normally.
+After that first activation, keep `BEATS_MONITOR_REQUIRE_FRESH_GAME_BRIDGE=false`
+so normal no-restart builds do not falsely disable queuing just because the
+binary on disk is newer than the running game process.
 God command execution uses the same queue with action `god_command`; keep
 `BEATS_MONITOR_ALLOW_GOD_COMMANDS=false` unless the server build includes
 `Game.playerSay` in Lua and the command must be enabled for the configured GOD

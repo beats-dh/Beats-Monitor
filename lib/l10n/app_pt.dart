@@ -100,15 +100,15 @@ class AppPt {
     'type_god_command':
         'Digite o comando GOD exatamente, ex: /t Player,32365,32242,7',
     'type_private_message_to': 'Mensagem para {0}',
-    'error_sending_message': 'NÃ£o foi possÃ­vel enviar a mensagem.',
+    'error_sending_message': 'Não foi possível enviar a mensagem.',
     'chat_command_queued': 'Mensagem enfileirada para o servidor do jogo.',
     'god_command_queued': 'Comando GOD enfileirado para o servidor do jogo.',
     'private_message_format': 'Use: Nome do jogador: mensagem',
     'god_commands': 'Comandos',
     'god_commands_desc':
-        'Os comandos sÃ£o executados como seu personagem no jogo. Digite o comando com barra exatamente como ele deve rodar no jogo.',
+        'Os comandos são executados como seu personagem no jogo. Digite o comando com barra exatamente como ele deve rodar no jogo.',
     'no_private_conversations':
-        'Nenhuma mensagem privada enviada para vocÃª ainda.',
+        'Nenhuma mensagem privada enviada para você ainda.',
 
     // Erros
     'error_connection': 'Erro de conexão: {0}',

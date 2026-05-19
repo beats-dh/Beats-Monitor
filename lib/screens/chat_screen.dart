@@ -204,7 +204,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   String _responseMessage(dynamic response, String fallbackKey) {
     try {
-      final data = json.decode(response.body);
+      final data = json.decode(utf8.decode(response.bodyBytes));
       if (data is Map &&
           data['mensagem'] is String &&
           (data['mensagem'] as String).isNotEmpty) {

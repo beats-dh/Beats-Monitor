@@ -6,6 +6,9 @@ import 'package:beats_monitor/services/config_service.dart';
 
 class ApiService {
   static const Duration _timeout = Duration(seconds: 10);
+  static const Map<String, String> _jsonHeaders = {
+    'Content-Type': 'application/json; charset=utf-8',
+  };
 
   static Future<bool> _refreshTokenIfNeeded() async {
     if (AuthService.hasCredentials) {
@@ -17,9 +20,13 @@ class ApiService {
   static Future<Map<String, String>> _getHeaders() async {
     await _refreshTokenIfNeeded();
     return {
-      'Content-Type': 'application/json',
+      ..._jsonHeaders,
       'Authorization': 'Bearer ${AuthService.token}',
     };
+  }
+
+  static List<int>? _encodeJsonBody(dynamic body) {
+    return body != null ? utf8.encode(json.encode(body)) : null;
   }
 
   static Future<http.Response> get(String endpoint) async {
@@ -51,7 +58,7 @@ class ApiService {
       final response = await http.post(
         Uri.parse('${ConfigService().apiBaseUrl}/$endpoint'),
         headers: headers,
-        body: body != null ? json.encode(body) : null,
+        body: _encodeJsonBody(body),
       ).timeout(_timeout);
 
       if (response.statusCode == 401) {
@@ -75,7 +82,7 @@ class ApiService {
       final response = await http.put(
         Uri.parse('${ConfigService().apiBaseUrl}/$endpoint'),
         headers: headers,
-        body: body != null ? json.encode(body) : null,
+        body: _encodeJsonBody(body),
       ).timeout(_timeout);
       return response;
     } catch (e) {

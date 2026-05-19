@@ -10,6 +10,7 @@ process.env.BEATS_MONITOR_GAME_AUTH = "false";
 const {
   chatCommandFromRequest,
   chatHistoryWhereSql,
+  mysqlArgsForConfig,
   privateRowVisibleToIdentity
 } = require("./beats-monitor-api");
 
@@ -17,23 +18,23 @@ const waldir = { subject: "wmshuee@gmail.com", account_id: 8, player: "Waldir" }
 
 test("private history includes all private messages for the monitor", () => {
   assert.equal(
-    privateRowVisibleToIdentity({ player_name: "Waldir", message: "to Tankso: test" }, waldir),
+    privateRowVisibleToIdentity({ channel_key: "chat_private", player_name: "Waldir", message: "to Tankso: test" }, waldir),
     true
   );
   assert.equal(
-    privateRowVisibleToIdentity({ player_name: "Tankso", message: "to Waldir: answer" }, waldir),
+    privateRowVisibleToIdentity({ channel_key: "chat_private", player_name: "Tankso", message: "to Waldir: answer" }, waldir),
     true
   );
   assert.equal(
-    privateRowVisibleToIdentity({ player_name: "Tankso", message: "to Another: hidden" }, waldir),
+    privateRowVisibleToIdentity({ channel_key: "chat_private", player_name: "Tankso", message: "to Another: hidden" }, waldir),
     true
   );
   assert.equal(
-    privateRowVisibleToIdentity({ player_name: "Tankso", message: "to Waldirx: hidden" }, waldir),
+    privateRowVisibleToIdentity({ channel_key: "chat_private", player_name: "Tankso", message: "to Waldirx: hidden" }, waldir),
     true
   );
   assert.equal(
-    privateRowVisibleToIdentity({ player_name: "Tankso", message: "to Waldir: answer" }, {}),
+    privateRowVisibleToIdentity({ channel_key: "chat_private", player_name: "Tankso", message: "to Waldir: answer" }, {}),
     true
   );
 });
@@ -50,16 +51,26 @@ test("private history query includes the full private channel", () => {
 test("private send command is queued as the authenticated monitor player", () => {
   const command = chatCommandFromRequest(
     "server/chat-message",
-    { channel: "chat_private", target: "Tankso", message: "hello" },
+    { channel: "chat_private", target: "Tankso", message: "já não" },
     waldir
   );
 
   assert.equal(command.action, "private");
   assert.equal(command.channel_key, "chat_private");
   assert.equal(command.target_name, "Tankso");
-  assert.equal(command.message, "hello");
+  assert.equal(command.message, "já não");
   assert.equal(command.requested_by, "Waldir");
   assert.equal(command.requested_by_account_id, 8);
+});
+
+test("mysql commands force utf8mb4 for chat text", () => {
+  const args = mysqlArgsForConfig({
+    socket: "/var/run/mysqld/mysqld.sock",
+    user: "penultima",
+    database: "penultima"
+  }, "SELECT 'já não';");
+
+  assert.ok(args.includes("--default-character-set=utf8mb4"));
 });
 
 test("god command is queued exactly as typed by the authenticated monitor player", () => {

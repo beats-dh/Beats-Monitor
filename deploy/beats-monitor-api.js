@@ -28,6 +28,7 @@ const CHAT_HISTORY_LIMIT = Number.parseInt(process.env.BEATS_MONITOR_CHAT_HISTOR
 const CHAT_POLL_MS = Number.parseInt(process.env.BEATS_MONITOR_CHAT_POLL_MS || "2000", 10);
 const ALLOW_CHAT_SEND = parseBoolean(process.env.BEATS_MONITOR_ALLOW_CHAT_SEND || process.env.BEATS_MONITOR_ALLOW_MUTATIONS || "false");
 const ALLOW_GOD_COMMANDS = parseBoolean(process.env.BEATS_MONITOR_ALLOW_GOD_COMMANDS || process.env.BEATS_MONITOR_ALLOW_MUTATIONS || "false");
+const REQUIRE_FRESH_GAME_BRIDGE = parseBoolean(process.env.BEATS_MONITOR_REQUIRE_FRESH_GAME_BRIDGE || "false");
 
 if (!TOKEN_SECRET || TOKEN_SECRET.length < 32) {
   failStart("BEATS_MONITOR_TOKEN_SECRET must be set and at least 32 characters.");
@@ -106,15 +107,19 @@ function sendOptions(request, response) {
 
 function readBody(request) {
   return new Promise((resolve, reject) => {
-    let body = "";
+    const chunks = [];
+    let totalBytes = 0;
     request.on("data", (chunk) => {
-      body += chunk.toString("utf8");
-      if (body.length > 1024 * 1024) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      totalBytes += buffer.length;
+      chunks.push(buffer);
+      if (totalBytes > 1024 * 1024) {
         reject(new Error("Request body is too large."));
         request.destroy();
       }
     });
     request.on("end", () => {
+      const body = Buffer.concat(chunks, totalBytes).toString("utf8");
       if (!body.trim()) {
         resolve({});
         return;
@@ -324,15 +329,20 @@ function dbConfig() {
   };
 }
 
-function mysqlQuery(sql, fields) {
-  const db = dbConfig();
-  const args = ["--batch", "--skip-column-names", "--raw"];
+function mysqlArgsForConfig(db, sql) {
+  const args = ["--batch", "--skip-column-names", "--raw", "--default-character-set=utf8mb4"];
   if (db.socket) {
     args.push("--protocol=SOCKET", `--socket=${db.socket}`);
   } else {
     args.push(`--host=${db.host}`, `--port=${db.port}`);
   }
   args.push(`--user=${db.user}`, db.database, "--execute", sql);
+  return args;
+}
+
+function mysqlQuery(sql, fields) {
+  const db = dbConfig();
+  const args = mysqlArgsForConfig(db, sql);
 
   const output = execFileSync("mysql", args, {
     encoding: "utf8",
@@ -423,6 +433,14 @@ function gameProcessStartTimeMs(pid) {
 }
 
 function chatBridgeActive() {
+  if (CHAT_SOURCE !== "database") {
+    return false;
+  }
+
+  if (!REQUIRE_FRESH_GAME_BRIDGE) {
+    return true;
+  }
+
   const pid = canaryPid();
   if (!pid) {
     return false;
@@ -1299,5 +1317,7 @@ module.exports = {
   privateRowVisibleToIdentity,
   monitorPrivatePlayerName,
   chatCommandFromRequest,
+  mysqlArgsForConfig,
+  readBody,
   startServer
 };
