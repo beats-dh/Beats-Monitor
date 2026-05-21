@@ -5,6 +5,7 @@ class WebSocketEvents {
   static const String chatHelp = 'chat_help';
   static const String chatPrivate = 'chat_private';
   static const String chatHistory = 'chat_history';
+  static const String runtimeLog = 'runtime_log';
   static const String systemResources = 'system_resources';
   static const String serverStatus = 'server_status';
 }

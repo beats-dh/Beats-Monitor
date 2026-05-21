@@ -7,6 +7,7 @@ class AppPt {
     'server_status_title': 'Status do Servidor',
     'chat_title': 'Chat',
     'live_title': 'Live',
+    'logs_title': 'Logs',
     'config_title': 'Configurações',
     'settings': 'Configurações',
     'login': 'Login',
@@ -19,6 +20,7 @@ class AppPt {
     'server_status_desc': 'Status atual do servidor',
     'chat_desc': 'Chat em tempo real',
     'live_desc': 'Visão local do cliente ao vivo',
+    'logs_desc': 'Runtime log e stream de logs do servidor',
     'config_desc': 'Ajustes e preferências',
     'settings_desc': 'Ajustes e preferências',
 
@@ -223,6 +225,16 @@ class AppPt {
     'monitor_connection_status': 'Status: Conectado ao servidor',
     'monitor_connected_tooltip': 'Conectado',
     'monitor_reconnect_tooltip': 'Reconectar',
+
+    // Tela de Logs
+    'runtime_log': 'Runtime log',
+    'runtime_log_empty': 'Aguardando linhas do runtime log',
+    'runtime_log_waiting':
+        'O monitor mostra o final atual do arquivo e adiciona novas linhas em tempo real.',
+    'runtime_log_missing': 'runtime.log nao foi encontrado',
+    'runtime_log_truncated': 'mostrando linhas mais recentes',
+    'runtime_log_autoscroll': 'Auto-scroll',
+    'runtime_log_clear': 'Recarregar log',
 
     // Tela de Chat
     'refresh_tooltip': 'Atualizar mensagens',

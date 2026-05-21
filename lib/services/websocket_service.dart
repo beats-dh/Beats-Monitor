@@ -36,6 +36,7 @@ class WebSocketService extends ChangeNotifier {
   final _systemDataController = StreamController<SystemData>.broadcast();
   final _serverStatusController = StreamController<ServerStatus>.broadcast();
   final _chatMessageController = StreamController<ChatMessage>.broadcast();
+  final _runtimeLogController = StreamController<RuntimeLogEvent>.broadcast();
   final _connectionStatusController = StreamController<bool>.broadcast();
 
   // Lista de eventos inscritos
@@ -44,6 +45,7 @@ class WebSocketService extends ChangeNotifier {
   Stream<SystemData> get systemDataStream => _systemDataController.stream;
   Stream<ServerStatus> get serverStatusStream => _serverStatusController.stream;
   Stream<ChatMessage> get chatMessageStream => _chatMessageController.stream;
+  Stream<RuntimeLogEvent> get runtimeLogStream => _runtimeLogController.stream;
   Stream<bool> get connectionStatusStream => _connectionStatusController.stream;
   bool get connectionStatus => _isConnected;
   int get reconnectAttempts => _reconnectAttempts;
@@ -250,6 +252,10 @@ class WebSocketService extends ChangeNotifier {
               });
               _chatMessageController.add(message);
               MonitorNotificationService.notifyForChatMessage(message);
+              break;
+
+            case WebSocketEvents.runtimeLog:
+              _runtimeLogController.add(RuntimeLogEvent.fromJson(eventData));
               break;
 
             case WebSocketEvents.systemResources:
@@ -492,6 +498,7 @@ class WebSocketService extends ChangeNotifier {
     _systemDataController.close();
     _serverStatusController.close();
     _chatMessageController.close();
+    _runtimeLogController.close();
     _connectionStatusController.close();
     super.dispose();
   }

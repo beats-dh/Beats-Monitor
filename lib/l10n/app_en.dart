@@ -7,6 +7,7 @@ class AppEn {
     'server_status_title': 'Server Status',
     'chat_title': 'Chat',
     'live_title': 'Live',
+    'logs_title': 'Logs',
     'config_title': 'Settings',
     'login': 'Login',
     'settings': 'Settings',
@@ -23,6 +24,7 @@ class AppEn {
     'server_status_desc': 'Current server status',
     'chat_desc': 'Real-time chat',
     'live_desc': 'Live local client view',
+    'logs_desc': 'Runtime log and server log stream',
     'config_desc': 'Settings and preferences',
     'login_desc': 'Login to access the system',
     'settings_desc': 'Settings and preferences',
@@ -226,6 +228,16 @@ class AppEn {
     'monitor_connection_status': 'Status: Connected to server',
     'monitor_connected_tooltip': 'Connected',
     'monitor_reconnect_tooltip': 'Reconnect',
+
+    // Logs Screen
+    'runtime_log': 'Runtime log',
+    'runtime_log_empty': 'Waiting for runtime log lines',
+    'runtime_log_waiting':
+        'The monitor will show the current tail and append new lines in real time.',
+    'runtime_log_missing': 'runtime.log was not found',
+    'runtime_log_truncated': 'showing latest lines',
+    'runtime_log_autoscroll': 'Auto-scroll',
+    'runtime_log_clear': 'Reload log',
 
     // Config Screen
     'appearance': 'Appearance',

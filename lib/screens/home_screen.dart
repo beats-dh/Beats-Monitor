@@ -11,6 +11,7 @@ import 'chat_screen.dart';
 import 'online_players_screen.dart';
 import 'banned_players_screen.dart';
 import 'live_screen.dart';
+import 'logs_screen.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 
@@ -102,12 +103,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisSpacing: kIsWeb || Platform.isWindows ? 12 : 24,
                 childAspectRatio: kIsWeb || Platform.isWindows ? 1.2 : 1.0,
               ),
-              itemCount: 7,
+              itemCount: 8,
               itemBuilder: (context, index) => _buildHomeItem(context, index),
             )
           : ListView.separated(
               padding: EdgeInsets.all(kIsWeb || Platform.isWindows ? 12 : 24),
-              itemCount: 7,
+              itemCount: 8,
               separatorBuilder: (context, i) =>
                   SizedBox(height: kIsWeb || Platform.isWindows ? 12 : 24),
               itemBuilder: (context, index) =>
@@ -188,6 +189,18 @@ class _HomeScreenState extends State<HomeScreen> {
           () => Navigator.push(
             context,
             PageTransition(child: const LiveScreen()),
+          ),
+          isList: isList,
+        );
+      case 6:
+        return _buildCard(
+          context,
+          'logs_title',
+          Icons.article_rounded,
+          Colors.indigo,
+          () => Navigator.push(
+            context,
+            PageTransition(child: const LogsScreen()),
           ),
           isList: isList,
         );

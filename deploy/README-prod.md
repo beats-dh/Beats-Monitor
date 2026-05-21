@@ -61,6 +61,11 @@ fills that table from the chat channel scripts and the game speech path after th
 game is running code that contains the Penultima Monitor chat logger. The monitor
 reads local chat, World/English chat, trade, help, and private messages.
 
+Runtime logs are read directly and read-only from `BEATS_MONITOR_LOG_ROOT`.
+By default this is `/home/penultima/Penultima-Server/logs`, and the live view
+tails `runtime.log` over the existing authenticated WebSocket connection. This
+does not control, signal, reload, or restart the game process.
+
 Outgoing monitor chat is queued in `beats_monitor_commands`. Keep
 `BEATS_MONITOR_ALLOW_CHAT_SEND=false` unless the game server build containing the
 command consumer has been deployed and the game process has restarted normally.

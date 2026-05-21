@@ -29,6 +29,11 @@ const CHAT_POLL_MS = Number.parseInt(process.env.BEATS_MONITOR_CHAT_POLL_MS || "
 const ALLOW_CHAT_SEND = parseBoolean(process.env.BEATS_MONITOR_ALLOW_CHAT_SEND || process.env.BEATS_MONITOR_ALLOW_MUTATIONS || "false");
 const ALLOW_GOD_COMMANDS = parseBoolean(process.env.BEATS_MONITOR_ALLOW_GOD_COMMANDS || process.env.BEATS_MONITOR_ALLOW_MUTATIONS || "false");
 const REQUIRE_FRESH_GAME_BRIDGE = parseBoolean(process.env.BEATS_MONITOR_REQUIRE_FRESH_GAME_BRIDGE || "false");
+const LOG_ROOT = path.resolve(process.env.BEATS_MONITOR_LOG_ROOT || path.join(SERVER_ROOT, "logs"));
+const RUNTIME_LOG_FILE = process.env.BEATS_MONITOR_RUNTIME_LOG_FILE || "runtime.log";
+const LOG_TAIL_BYTES = Number.parseInt(process.env.BEATS_MONITOR_LOG_TAIL_BYTES || String(256 * 1024), 10);
+const LOG_HISTORY_LIMIT_LINES = Number.parseInt(process.env.BEATS_MONITOR_LOG_HISTORY_LIMIT_LINES || "1000", 10);
+const LOG_POLL_MS = Number.parseInt(process.env.BEATS_MONITOR_LOG_POLL_MS || "1000", 10);
 
 if (!TOKEN_SECRET || TOKEN_SECRET.length < 32) {
   failStart("BEATS_MONITOR_TOKEN_SECRET must be set and at least 32 characters.");
@@ -41,6 +46,11 @@ if (!GAME_AUTH_ENABLED && (!LOGIN_USER || (!LOGIN_PASSWORD_HASH && !LOGIN_PASSWO
 const clients = new Set();
 let lastCpuSample = readCpuSample();
 let lastChatMessageId = 0;
+const runtimeLogState = {
+  filePath: "",
+  offset: 0,
+  partial: ""
+};
 
 function failStart(message) {
   console.error(`[penultima-monitor-api] ${message}`);
@@ -285,6 +295,262 @@ function routePath(request) {
     url,
     route: pathname.replace(/^\/api\/v1\/?/, "").replace(/^\/+/, "")
   };
+}
+
+function safeLimit(value, fallback, min, max) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.max(min, Math.min(parsed, max));
+}
+
+function relativeLogName(filePath) {
+  return path.relative(LOG_ROOT, filePath).replace(/\\/g, "/");
+}
+
+function ensureLogPathInsideRoot(filePath) {
+  const resolved = path.resolve(filePath);
+  if (resolved !== LOG_ROOT && !resolved.startsWith(LOG_ROOT + path.sep)) {
+    const error = new Error("Log path is outside the configured log root.");
+    error.statusCode = 400;
+    throw error;
+  }
+  return resolved;
+}
+
+function resolveLogPath(relativePath) {
+  const normalized = String(relativePath || "").replace(/\\/g, "/").replace(/^\/+/, "");
+  if (!normalized || normalized.includes("\0")) {
+    const error = new Error("Invalid log path.");
+    error.statusCode = 400;
+    throw error;
+  }
+  return ensureLogPathInsideRoot(path.join(LOG_ROOT, normalized));
+}
+
+function runtimeLogPath() {
+  return resolveLogPath(RUNTIME_LOG_FILE);
+}
+
+function splitLogLines(text) {
+  if (!text) {
+    return [];
+  }
+  return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+}
+
+function readLogTail(filePath, options = {}) {
+  const resolved = ensureLogPathInsideRoot(filePath);
+  const maxBytes = safeLimit(options.maxBytes, LOG_TAIL_BYTES, 4096, 4 * 1024 * 1024);
+  const maxLines = safeLimit(options.maxLines, LOG_HISTORY_LIMIT_LINES, 50, 5000);
+
+  let stat;
+  try {
+    stat = fs.statSync(resolved);
+  } catch {
+    const error = new Error("Log file not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (!stat.isFile()) {
+    const error = new Error("Requested log path is not a file.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const start = Math.max(0, stat.size - maxBytes);
+  const length = stat.size - start;
+  const buffer = Buffer.alloc(length);
+  const fd = fs.openSync(resolved, "r");
+  try {
+    if (length > 0) {
+      fs.readSync(fd, buffer, 0, length, start);
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  let text = buffer.toString("utf8");
+  if (start > 0) {
+    const firstNewline = text.indexOf("\n");
+    text = firstNewline >= 0 ? text.slice(firstNewline + 1) : "";
+  }
+
+  const lines = splitLogLines(text);
+  if (lines.length && lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+
+  return {
+    file: relativeLogName(resolved),
+    size: stat.size,
+    mtime_ms: Math.floor(stat.mtimeMs),
+    truncated: start > 0,
+    lines: lines.slice(-maxLines)
+  };
+}
+
+function listLogFiles() {
+  const result = [];
+  const stack = [{ dir: LOG_ROOT, prefix: "" }];
+  const maxFiles = 5000;
+
+  while (stack.length && result.length < maxFiles) {
+    const current = stack.pop();
+    let entries = [];
+    try {
+      entries = fs.readdirSync(current.dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+    for (const entry of entries) {
+      const fullPath = path.join(current.dir, entry.name);
+      const relativePath = current.prefix ? `${current.prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        stack.push({ dir: fullPath, prefix: relativePath });
+        continue;
+      }
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      try {
+        const stat = fs.statSync(fullPath);
+        result.push({
+          file: relativePath,
+          size: stat.size,
+          mtime_ms: Math.floor(stat.mtimeMs),
+          runtime: relativePath === RUNTIME_LOG_FILE
+        });
+      } catch {
+        // Ignore files that rotate while being listed.
+      }
+    }
+  }
+
+  result.sort((a, b) => b.mtime_ms - a.mtime_ms || a.file.localeCompare(b.file));
+  return {
+    root: LOG_ROOT,
+    runtime_file: RUNTIME_LOG_FILE,
+    truncated: result.length >= maxFiles,
+    files: result
+  };
+}
+
+function runtimeLogSnapshotPayload() {
+  const filePath = runtimeLogPath();
+  const payload = readLogTail(filePath);
+  runtimeLogState.filePath = filePath;
+  runtimeLogState.offset = payload.size;
+  runtimeLogState.partial = "";
+  return { ...payload, snapshot: true };
+}
+
+function runtimeLogSubscribersExist() {
+  for (const client of clients) {
+    if (client.authenticated && client.subscriptions.has("runtime_log")) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function readRuntimeLogDelta() {
+  const filePath = runtimeLogPath();
+  let stat;
+  try {
+    stat = fs.statSync(filePath);
+  } catch {
+    runtimeLogState.filePath = filePath;
+    runtimeLogState.offset = 0;
+    runtimeLogState.partial = "";
+    return {
+      file: relativeLogName(filePath),
+      size: 0,
+      mtime_ms: 0,
+      snapshot: false,
+      missing: true,
+      lines: []
+    };
+  }
+
+  if (!stat.isFile()) {
+    return null;
+  }
+
+  if (runtimeLogState.filePath !== filePath || stat.size < runtimeLogState.offset) {
+    return runtimeLogSnapshotPayload();
+  }
+
+  if (stat.size === runtimeLogState.offset) {
+    return null;
+  }
+
+  let start = runtimeLogState.offset;
+  let truncated = false;
+  const maxBytes = safeLimit(LOG_TAIL_BYTES, 256 * 1024, 4096, 4 * 1024 * 1024);
+  if (stat.size - start > maxBytes) {
+    start = stat.size - maxBytes;
+    runtimeLogState.partial = "";
+    truncated = true;
+  }
+
+  const length = stat.size - start;
+  const buffer = Buffer.alloc(length);
+  const fd = fs.openSync(filePath, "r");
+  try {
+    fs.readSync(fd, buffer, 0, length, start);
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  runtimeLogState.offset = stat.size;
+
+  let text = buffer.toString("utf8");
+  if (truncated) {
+    const firstNewline = text.indexOf("\n");
+    text = firstNewline >= 0 ? text.slice(firstNewline + 1) : "";
+  }
+
+  const endsWithLineBreak = /\r?\n$/.test(text);
+  const parts = splitLogLines(runtimeLogState.partial + text);
+  runtimeLogState.partial = endsWithLineBreak ? "" : (parts.pop() || "");
+  if (parts.length && parts[parts.length - 1] === "") {
+    parts.pop();
+  }
+
+  return {
+    file: relativeLogName(filePath),
+    size: stat.size,
+    mtime_ms: Math.floor(stat.mtimeMs),
+    snapshot: false,
+    truncated,
+    lines: parts
+  };
+}
+
+function pollRuntimeLog() {
+  if (!runtimeLogSubscribersExist()) {
+    return;
+  }
+
+  try {
+    const payload = readRuntimeLogDelta();
+    if (payload && (payload.lines.length || payload.snapshot || payload.missing)) {
+      broadcastEvent("runtime_log", payload);
+    }
+  } catch (error) {
+    broadcastEvent("runtime_log", {
+      file: RUNTIME_LOG_FILE,
+      snapshot: false,
+      error: error.message,
+      lines: []
+    });
+  }
 }
 
 function parseLuaConfig(filePath) {
@@ -982,6 +1248,30 @@ async function handleApiRequest(request, response) {
     return;
   }
 
+  if (request.method === "GET" && route === "server/logs") {
+    sendJson(request, response, 200, { sucesso: true, dados: listLogFiles() });
+    return;
+  }
+
+  if (request.method === "GET" && route === "server/logs/runtime") {
+    try {
+      sendJson(request, response, 200, { sucesso: true, dados: { ...readLogTail(runtimeLogPath()), snapshot: true } });
+    } catch (error) {
+      sendJson(request, response, error.statusCode || 500, { sucesso: false, mensagem: error.message });
+    }
+    return;
+  }
+
+  if (request.method === "GET" && route.startsWith("server/logs/file/")) {
+    try {
+      const relativePath = decodeURIComponent(route.slice("server/logs/file/".length));
+      sendJson(request, response, 200, { sucesso: true, dados: readLogTail(resolveLogPath(relativePath)) });
+    } catch (error) {
+      sendJson(request, response, error.statusCode || 500, { sucesso: false, mensagem: error.message });
+    }
+    return;
+  }
+
   if (request.method === "GET" && route === "playersOnline") {
     sendJson(request, response, 200, buildPlayersPayload());
     return;
@@ -1188,11 +1478,35 @@ function handleSocketMessage(client, message) {
     if (client.subscriptions.has("chat_history")) {
       sendToClient(client, { type: "event", event: "chat_history", data: buildChatHistoryPayload(payload.events, client.identity) });
     }
+    if (client.subscriptions.has("runtime_log")) {
+      try {
+        sendToClient(client, { type: "event", event: "runtime_log", data: runtimeLogSnapshotPayload() });
+      } catch (error) {
+        sendToClient(client, {
+          type: "event",
+          event: "runtime_log",
+          data: { file: RUNTIME_LOG_FILE, snapshot: true, error: error.message, lines: [] }
+        });
+      }
+    }
     return;
   }
 
   if (payload.type === "chat_history") {
     sendToClient(client, { type: "event", event: "chat_history", data: buildChatHistoryPayload(payload.channels, client.identity) });
+    return;
+  }
+
+  if (payload.type === "runtime_log_snapshot") {
+    try {
+      sendToClient(client, { type: "event", event: "runtime_log", data: runtimeLogSnapshotPayload() });
+    } catch (error) {
+      sendToClient(client, {
+        type: "event",
+        event: "runtime_log",
+        data: { file: RUNTIME_LOG_FILE, snapshot: true, error: error.message, lines: [] }
+      });
+    }
     return;
   }
 
@@ -1288,6 +1602,7 @@ function startServer() {
   }, 2000);
 
   const chatInterval = setInterval(pollChatMessages, Math.max(1000, CHAT_POLL_MS));
+  const runtimeLogInterval = setInterval(pollRuntimeLog, Math.max(500, LOG_POLL_MS));
 
   server.listen(PORT, HOST, () => {
     initializeChatCursor();
@@ -1297,11 +1612,13 @@ function startServer() {
   process.on("SIGTERM", () => {
     clearInterval(statusInterval);
     clearInterval(chatInterval);
+    clearInterval(runtimeLogInterval);
     server.close(() => process.exit(0));
   });
   process.on("SIGINT", () => {
     clearInterval(statusInterval);
     clearInterval(chatInterval);
+    clearInterval(runtimeLogInterval);
     server.close(() => process.exit(0));
   });
 
@@ -1318,6 +1635,9 @@ module.exports = {
   monitorPrivatePlayerName,
   chatCommandFromRequest,
   mysqlArgsForConfig,
+  resolveLogPath,
+  readLogTail,
+  listLogFiles,
   readBody,
   startServer
 };
