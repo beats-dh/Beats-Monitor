@@ -11,6 +11,8 @@ import '../models/websocket_events.dart';
 class MonitorNotificationService {
   static const watchedPlayerName = 'Waldir';
   static const _enabledKey = 'monitor_chat_notifications_enabled';
+  static const _notificationWorkerScript = 'monitor_notification_worker.js';
+  static const _notificationWorkerScope = 'monitor-notifications/';
 
   static bool _initialized = false;
   static bool _enabled = true;
@@ -56,6 +58,7 @@ class MonitorNotificationService {
     }
 
     await setEnabled(true);
+    unawaited(_registerNotificationWorker());
     return true;
   }
 
@@ -160,9 +163,7 @@ class MonitorNotificationService {
         return false;
       }
 
-      final registration = await navigator.serviceWorker.ready.toDart.timeout(
-        const Duration(seconds: 2),
-      );
+      final registration = await _registerNotificationWorker();
 
       await registration
           .showNotification(title, _notificationOptions(body, tag))
@@ -171,6 +172,14 @@ class MonitorNotificationService {
     } catch (_) {
       return false;
     }
+  }
+
+  static Future<web.ServiceWorkerRegistration> _registerNotificationWorker() {
+    final options = web.RegistrationOptions(scope: _notificationWorkerScope);
+    return web.window.navigator.serviceWorker
+        .register(_notificationWorkerScript.toJS, options)
+        .toDart
+        .timeout(const Duration(seconds: 3));
   }
 
   static void _showFromPage(String title, String body, String tag) {

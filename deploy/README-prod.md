@@ -17,7 +17,7 @@ The adapter intentionally does not start, stop, or restart the game server. Muta
 Run locally:
 
 ```powershell
-D:\Server\Tools\flutter\bin\flutter.bat build web --release --base-href /beats-monitor/ --no-wasm-dry-run
+D:\Server\Tools\flutter\bin\flutter.bat build web --release --base-href /beats-monitor/ --no-wasm-dry-run --pwa-strategy=none
 ```
 
 Publish `D:\Server\Beats-Monitor\build\web` to:
@@ -65,12 +65,14 @@ Installed monitor notifications are client/PWA-side. After the user grants
 browser notification permission, the web client watches the existing WebSocket
 chat stream and shows a notification for every Help Chat message and every
 private message addressed to `BEATS_MONITOR_REQUIRED_PLAYER_NAME` (`Waldir` in
-the current production env). The client prefers the service-worker
-`showNotification` API for installed phone PWAs and falls back to page
-notifications if the service worker is not ready. This does not need a game
-server restart because it consumes already-emitted monitor chat events. True
-closed-app push delivery would require a separate Push API subscription and
-backend push sender.
+the current production env). The client registers
+`monitor_notification_worker.js` and uses its `showNotification` API for
+installed phone PWAs, falling back to page notifications if worker registration
+is not available. `cache_reset.js` clears old Flutter PWA caches once per static
+build so installed phones can pick up the latest `/beats-monitor/` files without
+a service restart. This does not need a game server restart because it consumes
+already-emitted monitor chat events. True closed-app push delivery would require
+a separate Push API subscription and backend push sender.
 
 Runtime logs are read directly and read-only from `BEATS_MONITOR_LOG_ROOT`.
 By default this is `/home/penultima/Penultima-Server/logs`, and the live view
