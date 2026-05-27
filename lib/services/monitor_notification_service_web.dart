@@ -1,6 +1,9 @@
-import 'dart:html' as html;
+import 'dart:async';
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:web/web.dart' as web;
 
 import '../models/events.dart';
 import '../models/websocket_events.dart';
@@ -11,6 +14,7 @@ class MonitorNotificationService {
 
   static bool _initialized = false;
   static bool _enabled = true;
+  static final Set<String> _shownNotificationTags = <String>{};
 
   static Future<void> initialize() async {
     if (_initialized) {
@@ -23,9 +27,10 @@ class MonitorNotificationService {
   }
 
   static bool get enabled => _enabled;
-  static bool get isSupported => html.Notification.supported;
+  static bool get isSupported =>
+      web.window.hasProperty('Notification'.toJS).toDart;
   static String get permission =>
-      isSupported ? html.Notification.permission ?? 'default' : 'unsupported';
+      isSupported ? web.Notification.permission : 'unsupported';
 
   static bool get _canNotify =>
       _enabled && isSupported && permission == 'granted';
@@ -43,7 +48,7 @@ class MonitorNotificationService {
     }
 
     if (permission != 'granted') {
-      final result = await html.Notification.requestPermission();
+      final result = (await web.Notification.requestPermission().toDart).toDart;
       if (result != 'granted') {
         await setEnabled(false);
         return false;
@@ -60,21 +65,21 @@ class MonitorNotificationService {
     }
 
     if (message.channel == WebSocketEvents.chatHelp) {
-      _show(
+      unawaited(_show(
         'Help Channel',
         '${message.player}: ${message.message}',
         'help-${message.timestamp.millisecondsSinceEpoch}-${message.message.hashCode}',
-      );
+      ));
       return;
     }
 
     if (message.channel == WebSocketEvents.chatPrivate &&
         _isPrivateMessageToWatchedPlayer(message)) {
-      _show(
+      unawaited(_show(
         'Private message to $watchedPlayerName',
         '${message.player}: ${_privateMessageBody(message.message)}',
         'private-$watchedPlayerName-${message.timestamp.millisecondsSinceEpoch}-${message.message.hashCode}',
-      );
+      ));
     }
   }
 
@@ -96,7 +101,7 @@ class MonitorNotificationService {
       return _sameName(legacyMatch.group(2) ?? '', watchedPlayerName);
     }
 
-    return false;
+    return !_sameName(message.player, watchedPlayerName);
   }
 
   static String _privateMessageBody(String text) {
@@ -116,16 +121,70 @@ class MonitorNotificationService {
     return text;
   }
 
-  static void _show(String title, String body, String tag) {
+  static Future<void> _show(String title, String body, String tag) async {
+    if (!_rememberNotificationTag(tag)) {
+      return;
+    }
+
     try {
-      html.Notification(
-        title,
-        body: body,
-        icon: 'icons/Icon-192.png',
-        tag: tag,
-      );
+      if (await _showFromServiceWorker(title, body, tag)) {
+        return;
+      }
+
+      _showFromPage(title, body, tag);
     } catch (_) {
       // Browser notification failures should not break live monitoring.
     }
+  }
+
+  static bool _rememberNotificationTag(String tag) {
+    if (_shownNotificationTags.contains(tag)) {
+      return false;
+    }
+
+    _shownNotificationTags.add(tag);
+    if (_shownNotificationTags.length > 64) {
+      _shownNotificationTags.remove(_shownNotificationTags.first);
+    }
+    return true;
+  }
+
+  static Future<bool> _showFromServiceWorker(
+    String title,
+    String body,
+    String tag,
+  ) async {
+    try {
+      final navigator = web.window.navigator;
+      if (!navigator.hasProperty('serviceWorker'.toJS).toDart) {
+        return false;
+      }
+
+      final registration = await navigator.serviceWorker.ready.toDart.timeout(
+        const Duration(seconds: 2),
+      );
+
+      await registration
+          .showNotification(title, _notificationOptions(body, tag))
+          .toDart;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static void _showFromPage(String title, String body, String tag) {
+    web.Notification(title, _notificationOptions(body, tag));
+  }
+
+  static web.NotificationOptions _notificationOptions(String body, String tag) {
+    return web.NotificationOptions(
+      body: body,
+      icon: 'icons/Icon-192.png',
+      badge: 'icons/Icon-192.png',
+      tag: tag,
+      renotify: true,
+      data: web.window.location.href.toJS,
+    );
   }
 }

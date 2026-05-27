@@ -235,6 +235,9 @@ class AppPt {
     'runtime_log_truncated': 'mostrando linhas mais recentes',
     'runtime_log_autoscroll': 'Auto-scroll',
     'runtime_log_clear': 'Recarregar log',
+    'log_files_refresh': 'Atualizar arquivos de log',
+    'log_files_empty':
+        'Nenhum arquivo foi encontrado na pasta de logs configurada',
 
     // Tela de Chat
     'refresh_tooltip': 'Atualizar mensagens',
@@ -261,7 +264,7 @@ class AppPt {
     'notifications': 'Notificações',
     'system_notifications': 'Notificações do Sistema',
     'system_notifications_desc':
-        'Avisar quando o Help Channel receber mensagem ou uma private for enviada para Waldir',
+        'Avisar este monitor instalado quando o Help Chat receber mensagem ou uma private for enviada para Waldir',
     'notification_permission': 'Permissão',
     'notification_permission_granted': 'Notificações de chat ativadas.',
     'notification_permission_denied':

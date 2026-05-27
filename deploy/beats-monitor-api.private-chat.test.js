@@ -81,8 +81,32 @@ test("god command is queued exactly as typed by the authenticated monitor player
   );
 
   assert.equal(command.action, "god_command");
-  assert.equal(command.channel_key, "chat_private");
+  assert.equal(command.channel_key, "chat_global");
   assert.equal(command.message, "/t Tankso,32365,32242,7");
   assert.equal(command.requested_by, "Waldir");
   assert.equal(command.requested_by_account_id, 8);
+});
+
+test("slash commands typed in normal chat use the god command queue", () => {
+  const command = chatCommandFromRequest(
+    "server/chat-message",
+    { channel: "chat_help", message: "/t Tankso,32365,32242,7" },
+    waldir
+  );
+
+  assert.equal(command.action, "god_command");
+  assert.equal(command.channel_key, "chat_global");
+  assert.equal(command.message, "/t Tankso,32365,32242,7");
+});
+
+test("local monitor chat is routed to world chat because monitor has no map position", () => {
+  const command = chatCommandFromRequest(
+    "server/chat-message",
+    { channel: "chat_local", message: "teste" },
+    waldir
+  );
+
+  assert.equal(command.action, "channel");
+  assert.equal(command.channel_key, "chat_global");
+  assert.equal(command.message, "teste");
 });

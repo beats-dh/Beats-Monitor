@@ -1,1 +1,17 @@
-dlrbOcH9AwssM5BzKNKZjR77u/SSkB2ONSMwpDAeNtSjeSLKDpARYm4RwS9fG0cGtzRVONKseIbhsm942iAzUl/QLRH8zkFcCkl3hl9HBKEm5hhsntLr3XhpYe1NO0E3pMhF7RBSL9KDs2WWXwBmeTMSVhNylYJau/BVUeipDEou0weGXY4dA1a251mLEl8WvsIKzL4K+La4XsIoosz+CZugAde532PC1H5ZxY/bGmulOCLPeehUgHSMxV8fbIbe6WEnsB0njuFQgGV8iJv7nVFowO9ceQXuSRMHTG9bUbEIoDmWeDOpfEwQcIa6qkh8aSGqG+Z2OYVKT/tXIgZr1ohrZ6oFApMfXWxcnRk2ubTjWaw647LSNNYSIEugKoMOes62TOAqjRptpNZN®Go©ùy=ÑMQ£s°ô∑«y⁄°Gë7;Øø¶v
+//
+//  Generated file. Do not edit.
+//
+
+// clang-format off
+
+#include "generated_plugin_registrant.h"
+
+#include <flutter_secure_storage_windows/flutter_secure_storage_windows_plugin.h>
+#include <permission_handler_windows/permission_handler_windows_plugin.h>
+
+void RegisterPlugins(flutter::PluginRegistry* registry) {
+  FlutterSecureStorageWindowsPluginRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("FlutterSecureStorageWindowsPlugin"));
+  PermissionHandlerWindowsPluginRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("PermissionHandlerWindowsPlugin"));
+}

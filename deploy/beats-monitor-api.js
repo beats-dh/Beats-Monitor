@@ -804,6 +804,11 @@ function enqueueBeatsMonitorCommand(command) {
   mysqlExecute(sql);
 }
 
+function isMonitorGodCommandText(message) {
+  const text = String(message || "").trimStart();
+  return text.startsWith("/") || text.startsWith("!");
+}
+
 function chatCommandFromRequest(route, body, identity) {
   const actor = identity?.player || identity?.subject || "Penultima";
   const accountId = toInt(identity?.account_id);
@@ -811,7 +816,7 @@ function chatCommandFromRequest(route, body, identity) {
   if (route === "server/god-command") {
     return {
       action: "god_command",
-      channel_key: "chat_private",
+      channel_key: "chat_global",
       message: body.command || body.message || "",
       requested_by: actor,
       requested_by_account_id: accountId
@@ -840,8 +845,15 @@ function chatCommandFromRequest(route, body, identity) {
   }
 
   const channel = String(body.channel || "");
-  if (channel === "chat_local") {
-    throw new Error("Local chat cannot be sent from Penultima Monitor because it has no in-game position.");
+  const message = body.message || "";
+  if (isMonitorGodCommandText(message)) {
+    return {
+      action: "god_command",
+      channel_key: "chat_global",
+      message,
+      requested_by: actor,
+      requested_by_account_id: accountId
+    };
   }
   if (channel === "chat_private") {
     return {
@@ -853,13 +865,14 @@ function chatCommandFromRequest(route, body, identity) {
       requested_by_account_id: accountId
     };
   }
-  if (!["chat_global", "chat_trade", "chat_help"].includes(channel)) {
+  const outgoingChannel = channel === "chat_local" ? "chat_global" : channel;
+  if (!["chat_global", "chat_trade", "chat_help"].includes(outgoingChannel)) {
     throw new Error("Unsupported chat channel.");
   }
   return {
     action: "channel",
-    channel_key: channel,
-    message: body.message,
+    channel_key: outgoingChannel,
+    message,
     requested_by: actor,
     requested_by_account_id: accountId
   };
@@ -1332,6 +1345,13 @@ async function handleApiRequest(request, response) {
     }
     try {
       const command = chatCommandFromRequest(route, body, identity);
+      if (command.action === "god_command" && !ALLOW_GOD_COMMANDS) {
+        sendJson(request, response, 403, {
+          sucesso: false,
+          mensagem: "God commands are disabled in this production adapter."
+        });
+        return;
+      }
       if (!String(command.message || "").trim()) {
         sendJson(request, response, 400, { sucesso: false, mensagem: "Message is required." });
         return;
@@ -1519,6 +1539,10 @@ function handleSocketMessage(client, message) {
     try {
       const body = payload.data || {};
       const command = chatCommandFromRequest("server/chat-message", body, client.identity);
+      if (command.action === "god_command" && !ALLOW_GOD_COMMANDS) {
+        sendToClient(client, { type: "error", message: "God commands are disabled in this production adapter." });
+        return;
+      }
       if (!String(command.message || "").trim()) {
         sendToClient(client, { type: "error", message: "Message is required." });
         return;

@@ -238,6 +238,8 @@ class AppEn {
     'runtime_log_truncated': 'showing latest lines',
     'runtime_log_autoscroll': 'Auto-scroll',
     'runtime_log_clear': 'Reload log',
+    'log_files_refresh': 'Refresh log files',
+    'log_files_empty': 'No files were found under the configured logs folder',
 
     // Config Screen
     'appearance': 'Appearance',
@@ -251,7 +253,7 @@ class AppEn {
     'notifications': 'Notifications',
     'system_notifications': 'System Notifications',
     'system_notifications_desc':
-        'Notify when Help Channel receives a message or a private message is sent to Waldir',
+        'Notify this installed monitor when Help Chat receives a message or a private message is sent to Waldir',
     'notification_permission': 'Permission',
     'notification_permission_granted': 'Chat notifications are enabled.',
     'notification_permission_denied': 'Browser notifications were not allowed.',
