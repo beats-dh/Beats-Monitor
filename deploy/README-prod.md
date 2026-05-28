@@ -17,7 +17,7 @@ The adapter intentionally does not start, stop, or restart the game server. Muta
 Run locally:
 
 ```powershell
-D:\Server\Tools\flutter\bin\flutter.bat build web --release --base-href /beats-monitor/ --no-wasm-dry-run --pwa-strategy=none
+D:\Server\Tools\flutter\bin\flutter.bat build web --release --base-href /beats-monitor/ --no-wasm-dry-run --pwa-strategy=none --no-tree-shake-icons
 ```
 
 Publish `D:\Server\Beats-Monitor\build\web` to:
@@ -25,6 +25,10 @@ Publish `D:\Server\Beats-Monitor\build\web` to:
 ```text
 /home/penultima/ultima-myaac/beats-monitor
 ```
+
+Keep `--no-tree-shake-icons` for the monitor web build. The command center uses
+Material and Material Design Icons across desktop and phone layouts; tree-shaken
+icon fonts have produced blank toolbar/action buttons in installed PWAs.
 
 Before publishing, verify the generated files in `build\web`, not only the
 source files under `web\`. `index.html`, `cache_reset.js`, and
@@ -114,16 +118,12 @@ keep it protected by the bearer-token validation and remove the dependency only
 after the Node adapter with native `server/logs` routes is active.
 
 If a static web build is published before the live API adapter has been updated,
-the Logs screen must keep working by falling back to the authenticated
-`runtime_log` WebSocket stream when `GET /server/logs` returns an unknown
-endpoint. In that fallback mode only `runtime.log` is available; the complete
-recursive folder appears automatically after the API adapter is activated.
-Static file deployment alone cannot add these routes to the running Node
-adapter. For a no-restart verification, check that the live adapter file contains
-`server/logs` and `runtime_log_snapshot`, and check the running process start
-time separately. If the process is still an older adapter, the UI fallback is the
-only behavior available until the adapter is activated during an approved
-maintenance window.
+the Logs screen and command-center runtime/log panels must try `GET /server/logs`
+first, then fall back to the authenticated `web/beats_monitor_logs.php` bridge
+when the running API still returns an unknown endpoint. The bridge exposes the
+complete recursive folder and selected-file tail snapshots without restarting the
+Node adapter. For no-restart verification, check the public PHP bridge with and
+without a bearer token, and check the running process start time separately.
 
 The branded web/PWA layout uses the Penultima assets under
 `assets/branding/`. Keep the web manifest, favicon, `web/icons/*`, and Android
@@ -133,9 +133,10 @@ left operation rail, top server-time/status cards, a hero command banner,
 command tiles, runtime-log preview, log-file entry panel, and recent activity.
 The phone dashboard intentionally has a separate mobile-only layout, not just a
 scaled desktop rail. When changing the dashboard Dart code, bump the shared
-build id in `web/index.html`, `web/cache_reset.js`, and
-`web/flutter_bootstrap.js` before publishing so installed phones request the new
-`main.dart.js?v=<buildId>` bundle.
+build id in `web/index.html`, `web/cache_reset.js`,
+`web/flutter_bootstrap.js`, and `web/flutter_service_worker.js` before
+publishing so installed phones request the new `main.dart.js?v=<buildId>` bundle
+and discard old PWA caches.
 
 Outgoing monitor chat is queued in `beats_monitor_commands`. Keep
 `BEATS_MONITOR_ALLOW_CHAT_SEND=false` unless the game server build containing the

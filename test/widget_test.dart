@@ -105,6 +105,18 @@ void main() {
     expect(find.text('Command Center'), findsOneWidget);
     expect(find.text('Monitor'), findsOneWidget);
     expect(find.byKey(const ValueKey('home_tile_Monitor')), findsOneWidget);
+    expect(find.text('15.23'), findsOneWidget);
+    expect(find.text('12.98'), findsNothing);
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -1200));
+    await tester.pump();
+    expect(find.text('Runtime Log (tail - live)'), findsOneWidget);
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -360));
+    await tester.pump();
+
+    expect(find.text('Log Files'), findsOneWidget);
+    expect(find.text('Server is starting up...'), findsNothing);
 
     webSocketService.dispose();
   });

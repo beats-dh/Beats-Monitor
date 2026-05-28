@@ -1,4 +1,4 @@
-const cleanupBuildId = "2026-05-28-command-center-5";
+const cleanupBuildId = "2026-05-28-command-center-7";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());

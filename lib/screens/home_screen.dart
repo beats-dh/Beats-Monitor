@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:provider/provider.dart';
 
@@ -11,6 +13,8 @@ import '../models/system_data.dart';
 import '../models/websocket_events.dart';
 import '../providers/auth_provider.dart';
 import '../providers/locale_provider.dart';
+import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../services/websocket_service.dart';
 import '../widgets/page_transition.dart';
 import '../widgets/penultima_branding.dart';
@@ -31,6 +35,8 @@ const _orange = Color(0xFFFFA319);
 const _red = Color(0xFFFF3C6A);
 const _panel = Color(0xDE090610);
 const _border = Color(0x664F1B79);
+const _serverClientVersion = '15.23';
+const _serverProtocolVersion = '1523';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -41,10 +47,13 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final List<String> _runtimeLines = <String>[];
+  final List<_DashboardLogFile> _logFiles = <_DashboardLogFile>[];
   final List<_ActivityEvent> _activity = <_ActivityEvent>[];
   Timer? _clockTimer;
+  Timer? _logRefreshTimer;
   DateTime _now = DateTime.now();
   bool _streamsReady = false;
+  bool _logsLoading = false;
   events.ServerStatus? _serverStatus;
   SystemData? _systemData;
   StreamSubscription<events.ServerStatus>? _serverStatusSubscription;
@@ -79,6 +88,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _systemDataSubscription?.cancel();
     _chatSubscription?.cancel();
     _runtimeSubscription?.cancel();
+    _logRefreshTimer?.cancel();
     super.dispose();
   }
 
@@ -92,6 +102,11 @@ class _HomeScreenState extends State<HomeScreen> {
       WebSocketEvents.runtimeLog,
     ]);
     webSocket.sendMessage({'type': 'runtime_log_snapshot'});
+    unawaited(_refreshDashboardLogs());
+    _logRefreshTimer = Timer.periodic(
+      const Duration(seconds: 20),
+      (_) => _refreshDashboardLogs(),
+    );
 
     _serverStatusSubscription = webSocket.serverStatusStream.listen((status) {
       if (!mounted) return;
@@ -148,17 +163,109 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  Future<void> _refreshDashboardLogs() async {
+    if (_logsLoading) {
+      return;
+    }
+
+    _logsLoading = true;
+    try {
+      final list = await _fetchDashboardLogList();
+      final runtimeFile = list.runtimeFile.isNotEmpty
+          ? list.runtimeFile
+          : (list.files.isNotEmpty ? list.files.first.file : 'runtime.log');
+      final snapshot = await _fetchDashboardLogSnapshot(
+        runtimeFile,
+        usingBridge: list.usingBridge,
+      );
+      final lines = snapshot['lines'] is List
+          ? (snapshot['lines'] as List).map((line) => line.toString()).toList()
+          : <String>[];
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _logFiles
+          ..clear()
+          ..addAll(list.files);
+        _runtimeLines
+          ..clear()
+          ..addAll(
+              lines.length > 12 ? lines.sublist(lines.length - 12) : lines);
+      });
+    } catch (_) {
+      // The dashboard still renders from the active WebSocket data when the
+      // compatibility log bridge is not reachable.
+    } finally {
+      _logsLoading = false;
+    }
+  }
+
+  Future<_DashboardLogList> _fetchDashboardLogList() async {
+    try {
+      final dados = _decodeDadosResponse(await ApiService.get('server/logs'));
+      return _DashboardLogList.fromJson(dados, usingBridge: false);
+    } catch (_) {
+      final dados = _decodeDadosResponse(
+        await _getLogsBridge({'action': 'list'}),
+      );
+      return _DashboardLogList.fromJson(dados, usingBridge: true);
+    }
+  }
+
+  Future<Map<String, dynamic>> _fetchDashboardLogSnapshot(
+    String file, {
+    required bool usingBridge,
+  }) async {
+    if (usingBridge) {
+      return _decodeDadosResponse(
+        await _getLogsBridge({
+          'action': 'file',
+          'path': file,
+        }),
+      );
+    }
+
+    try {
+      return _decodeDadosResponse(
+        await ApiService.get('server/logs/file/${Uri.encodeComponent(file)}'),
+      );
+    } catch (_) {
+      return _decodeDadosResponse(
+        await _getLogsBridge({
+          'action': 'file',
+          'path': file,
+        }),
+      );
+    }
+  }
+
+  Future<http.Response> _getLogsBridge(Map<String, String> query) async {
+    if (AuthService.hasCredentials) {
+      await AuthService.refreshToken();
+    }
+
+    final uri = Uri.base
+        .resolve('beats_monitor_logs.php')
+        .replace(queryParameters: query);
+    return http
+        .get(uri, headers: AuthService.authHeaders)
+        .timeout(const Duration(seconds: 10));
+  }
+
+  Map<String, dynamic> _decodeDadosResponse(http.Response response) {
+    final data = json.decode(utf8.decode(response.bodyBytes));
+    if (response.statusCode != 200 || data is! Map || data['dados'] is! Map) {
+      throw const FormatException('Invalid logs response');
+    }
+
+    return (data['dados'] as Map).map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+  }
+
   void _seedPreviewData() {
-    _runtimeLines.addAll(const [
-      '20:24:31  [Info]    Server is starting up...',
-      '20:24:32  [Info]    Loading configuration files',
-      '20:24:33  [Info]    MySQL connection established',
-      '20:24:33  [Info]    Game world loaded in 1824 ms',
-      '20:24:34  [Info]    Monsters spawned: 3542',
-      '20:24:35  [Warning] High memory usage detected: 37%',
-      '20:24:36  [Info]    Global save completed in 924 ms',
-      '20:24:37  [Notice]  Player Waldir has logged in.',
-    ]);
     _activity.addAll([
       _ActivityEvent(
         icon: MdiIcons.accountCheck,
@@ -235,8 +342,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         status: _serverStatus,
                         systemData: _systemData,
                         runtimeLines: _runtimeLines,
+                        logFiles: _logFiles,
                         activity: _activity,
                         compact: false,
+                        onRefreshLogs: () => _refreshDashboardLogs(),
                         onSelectLanguage: _showLanguageDialog,
                         onLogout: () => context.read<AuthProvider>().logout(),
                       ),
@@ -254,7 +363,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   status: _serverStatus,
                   systemData: _systemData,
                   runtimeLines: _runtimeLines,
+                  logFiles: _logFiles,
                   activity: _activity,
+                  onRefreshLogs: () => _refreshDashboardLogs(),
                   onSelectLanguage: _showLanguageDialog,
                   onLogout: () => context.read<AuthProvider>().logout(),
                 );
@@ -268,8 +379,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 status: _serverStatus,
                 systemData: _systemData,
                 runtimeLines: _runtimeLines,
+                logFiles: _logFiles,
                 activity: _activity,
                 compact: true,
+                onRefreshLogs: () => _refreshDashboardLogs(),
                 onSelectLanguage: _showLanguageDialog,
                 onLogout: () => context.read<AuthProvider>().logout(),
               );
@@ -497,8 +610,10 @@ class _CommandCenterDashboard extends StatelessWidget {
   final events.ServerStatus? status;
   final SystemData? systemData;
   final List<String> runtimeLines;
+  final List<_DashboardLogFile> logFiles;
   final List<_ActivityEvent> activity;
   final bool compact;
+  final VoidCallback onRefreshLogs;
   final VoidCallback onSelectLanguage;
   final VoidCallback onLogout;
 
@@ -511,8 +626,10 @@ class _CommandCenterDashboard extends StatelessWidget {
     required this.status,
     required this.systemData,
     required this.runtimeLines,
+    required this.logFiles,
     required this.activity,
     required this.compact,
+    required this.onRefreshLogs,
     required this.onSelectLanguage,
     required this.onLogout,
   });
@@ -603,8 +720,10 @@ class _CommandCenterDashboard extends StatelessWidget {
               sliver: SliverToBoxAdapter(
                 child: _OperationsGrid(
                   runtimeLines: runtimeLines,
+                  logFiles: logFiles,
                   activity: activity,
                   stack: width < 1040,
+                  onRefreshLogs: onRefreshLogs,
                 ),
               ),
             ),
@@ -624,7 +743,9 @@ class _PhoneCommandCenter extends StatelessWidget {
   final events.ServerStatus? status;
   final SystemData? systemData;
   final List<String> runtimeLines;
+  final List<_DashboardLogFile> logFiles;
   final List<_ActivityEvent> activity;
+  final VoidCallback onRefreshLogs;
   final VoidCallback onSelectLanguage;
   final VoidCallback onLogout;
 
@@ -637,7 +758,9 @@ class _PhoneCommandCenter extends StatelessWidget {
     required this.status,
     required this.systemData,
     required this.runtimeLines,
+    required this.logFiles,
     required this.activity,
+    required this.onRefreshLogs,
     required this.onSelectLanguage,
     required this.onLogout,
   });
@@ -695,7 +818,24 @@ class _PhoneCommandCenter extends StatelessWidget {
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
           sliver: SliverToBoxAdapter(
-            child: _RuntimeLogPanel(lines: runtimeLines, phone: true),
+            child: _RuntimeLogPanel(
+              lines: runtimeLines,
+              phone: true,
+              onRefresh: onRefreshLogs,
+            ),
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+          sliver: SliverToBoxAdapter(
+            child: SizedBox(
+              height: 320,
+              child: _LogFilesPanel(
+                files: logFiles,
+                onRefresh: onRefreshLogs,
+                phone: true,
+              ),
+            ),
           ),
         ),
         SliverPadding(
@@ -819,9 +959,9 @@ class _CommandTopBar extends StatelessWidget {
                 _MetricCard(
                   icon: MdiIcons.cubeOutline,
                   label: 'Version',
-                  value: '12.98',
-                  detail: 'protocol 12.98',
-                  accent: Color(0xFFB774FF),
+                  value: _serverClientVersion,
+                  detail: 'protocol $_serverProtocolVersion',
+                  accent: const Color(0xFFB774FF),
                   compact: true,
                 ),
               ],
@@ -855,9 +995,9 @@ class _CommandTopBar extends StatelessWidget {
         _MetricCard(
           icon: MdiIcons.cubeOutline,
           label: 'Version',
-          value: '12.98',
-          detail: 'protocol 12.98',
-          accent: Color(0xFFB774FF),
+          value: _serverClientVersion,
+          detail: 'protocol $_serverProtocolVersion',
+          accent: const Color(0xFFB774FF),
         ),
         const SizedBox(width: 12),
         actions,
@@ -1213,6 +1353,15 @@ class _PhoneStatusStrip extends StatelessWidget {
             accent: _orange,
           ),
         ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _PhoneStatChip(
+            icon: MdiIcons.cubeOutline,
+            label: 'Version',
+            value: _serverClientVersion,
+            accent: const Color(0xFFB774FF),
+          ),
+        ),
       ],
     );
   }
@@ -1220,13 +1369,17 @@ class _PhoneStatusStrip extends StatelessWidget {
 
 class _OperationsGrid extends StatelessWidget {
   final List<String> runtimeLines;
+  final List<_DashboardLogFile> logFiles;
   final List<_ActivityEvent> activity;
   final bool stack;
+  final VoidCallback onRefreshLogs;
 
   const _OperationsGrid({
     required this.runtimeLines,
+    required this.logFiles,
     required this.activity,
     required this.stack,
+    required this.onRefreshLogs,
   });
 
   @override
@@ -1236,12 +1389,18 @@ class _OperationsGrid extends StatelessWidget {
         children: [
           SizedBox(
             height: 360,
-            child: _RuntimeLogPanel(lines: runtimeLines),
+            child: _RuntimeLogPanel(
+              lines: runtimeLines,
+              onRefresh: onRefreshLogs,
+            ),
           ),
           const SizedBox(height: 12),
-          const SizedBox(
+          SizedBox(
             height: 360,
-            child: _LogFilesPanel(),
+            child: _LogFilesPanel(
+              files: logFiles,
+              onRefresh: onRefreshLogs,
+            ),
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -1258,12 +1417,18 @@ class _OperationsGrid extends StatelessWidget {
         children: [
           Expanded(
             flex: 8,
-            child: _RuntimeLogPanel(lines: runtimeLines),
+            child: _RuntimeLogPanel(
+              lines: runtimeLines,
+              onRefresh: onRefreshLogs,
+            ),
           ),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             flex: 4,
-            child: _LogFilesPanel(),
+            child: _LogFilesPanel(
+              files: logFiles,
+              onRefresh: onRefreshLogs,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1279,9 +1444,11 @@ class _OperationsGrid extends StatelessWidget {
 class _RuntimeLogPanel extends StatelessWidget {
   final List<String> lines;
   final bool phone;
+  final VoidCallback onRefresh;
 
   const _RuntimeLogPanel({
     required this.lines,
+    required this.onRefresh,
     this.phone = false,
   });
 
@@ -1299,12 +1466,28 @@ class _RuntimeLogPanel extends StatelessWidget {
               title: 'Runtime Log (tail - live)',
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
-                children: const [
-                  _TinyIconButton(icon: Icons.pause_rounded),
+                children: [
+                  _TinyIconButton(
+                    icon: MdiIcons.refresh,
+                    tooltip: 'Refresh runtime log',
+                    onPressed: onRefresh,
+                  ),
                   SizedBox(width: 6),
-                  _TinyIconButton(icon: Icons.download_rounded),
+                  _TinyIconButton(
+                    icon: MdiIcons.folderOpenOutline,
+                    tooltip: 'Open logs',
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        PageTransition<void>(child: const LogsScreen()),
+                      );
+                    },
+                  ),
                   SizedBox(width: 6),
-                  _TinyIconButton(icon: Icons.fullscreen_rounded),
+                  _TinyIconButton(
+                    icon: MdiIcons.fullscreen,
+                    tooltip: 'Fullscreen',
+                  ),
                 ],
               ),
               liveDot: true,
@@ -1319,8 +1502,21 @@ class _RuntimeLogPanel extends StatelessWidget {
                 ),
                 child: ListView.builder(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                  itemCount: lines.length,
+                  itemCount: lines.isEmpty ? 1 : lines.length,
                   itemBuilder: (context, index) {
+                    if (lines.isEmpty) {
+                      return const Text(
+                        'Loading live runtime log...',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 12.5,
+                          height: 1.35,
+                          color: Color(0xFF9F8DAE),
+                        ),
+                      );
+                    }
                     final line = lines[index];
                     return Text(
                       line,
@@ -1345,18 +1541,27 @@ class _RuntimeLogPanel extends StatelessWidget {
 }
 
 class _LogFilesPanel extends StatelessWidget {
-  const _LogFilesPanel();
+  final List<_DashboardLogFile> files;
+  final VoidCallback onRefresh;
+  final bool phone;
+
+  const _LogFilesPanel({
+    required this.files,
+    required this.onRefresh,
+    this.phone = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    const files = [
-      ('runtime.log', '8.4 MB', '27/05 20:24'),
-      ('error.log', '1.2 MB', '27/05 20:24'),
-      ('mysql.log', '2.7 MB', '27/05 20:24'),
-      ('commands.log', '512 KB', '27/05 20:20'),
-      ('chat.log', '3.1 MB', '27/05 20:22'),
-      ('events.log', '940 KB', '27/05 20:21'),
-    ];
+    _DashboardLogFile? runtime;
+    for (final file in files) {
+      if (file.runtime) {
+        runtime = file;
+        break;
+      }
+    }
+    final selected = runtime ?? (files.isNotEmpty ? files.first : null);
+    final visibleFiles = files.take(phone ? 6 : 8).toList();
 
     return _ChromePanel(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
@@ -1366,7 +1571,7 @@ class _LogFilesPanel extends StatelessWidget {
           _PanelHeader(
             icon: MdiIcons.folderMultipleOutline,
             title: 'Log Files',
-            trailing: _RefreshButton(),
+            trailing: _RefreshButton(onPressed: onRefresh),
           ),
           const SizedBox(height: 10),
           DecoratedBox(
@@ -1375,38 +1580,62 @@ class _LogFilesPanel extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: const Color(0x554F1B79)),
             ),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(
-                      'runtime.log',
+                      selected?.file ?? 'Loading logs...',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
-                  Icon(Icons.keyboard_arrow_down_rounded,
-                      color: Colors.white70),
+                  Text(
+                    files.isEmpty ? '' : '${files.length}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: const Color(0xFFBDA7CE),
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: Colors.white70,
+                  ),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: ListView.separated(
-              padding: EdgeInsets.zero,
-              itemCount: files.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 3),
-              itemBuilder: (context, index) {
-                final file = files[index];
-                return _FileRow(name: file.$1, size: file.$2, time: file.$3);
-              },
-            ),
+            child: visibleFiles.isEmpty
+                ? const Center(
+                    child: Text(
+                      'Waiting for log files...',
+                      style: TextStyle(
+                        color: Color(0xFFBDA7CE),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: EdgeInsets.zero,
+                    itemCount: visibleFiles.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 3),
+                    itemBuilder: (context, index) {
+                      final file = visibleFiles[index];
+                      return _FileRow(
+                        name: file.file,
+                        size: _formatBytes(file.size),
+                        time: _formatLogTime(file.modifiedMs),
+                      );
+                    },
+                  ),
           ),
           const SizedBox(height: 10),
           FilledButton.icon(
@@ -2211,34 +2440,49 @@ class _NotificationButton extends StatelessWidget {
 
 class _TinyIconButton extends StatelessWidget {
   final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
 
-  const _TinyIconButton({required this.icon});
+  const _TinyIconButton({
+    required this.icon,
+    required this.tooltip,
+    this.onPressed,
+  });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: 36,
       height: 34,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: const Color(0x77100917),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0x554F1B79)),
+      child: Tooltip(
+        message: tooltip,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0x77100917),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0x554F1B79)),
+          ),
+          child: IconButton(
+            onPressed: onPressed,
+            padding: EdgeInsets.zero,
+            icon: Icon(icon, color: Colors.white70, size: 18),
+          ),
         ),
-        child: Icon(icon, color: Colors.white70, size: 18),
       ),
     );
   }
 }
 
 class _RefreshButton extends StatelessWidget {
-  const _RefreshButton();
+  final VoidCallback onPressed;
+
+  const _RefreshButton({required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
     return OutlinedButton.icon(
-      onPressed: () {},
-      icon: const Icon(Icons.refresh_rounded, size: 16),
+      onPressed: onPressed,
+      icon: Icon(MdiIcons.refresh, size: 16),
       label: const Text('Refresh'),
       style: OutlinedButton.styleFrom(
         foregroundColor: const Color(0xFFEED9FF),
@@ -2364,6 +2608,75 @@ class _ActivityEvent {
   });
 }
 
+class _DashboardLogFile {
+  final String file;
+  final int size;
+  final int modifiedMs;
+  final bool runtime;
+
+  const _DashboardLogFile({
+    required this.file,
+    required this.size,
+    required this.modifiedMs,
+    required this.runtime,
+  });
+
+  factory _DashboardLogFile.fromJson(Map<String, dynamic> json) {
+    return _DashboardLogFile(
+      file: json['file']?.toString() ?? '',
+      size: _parseDashboardInt(json['size']),
+      modifiedMs: _parseDashboardInt(json['mtime_ms']),
+      runtime: json['runtime'] == true,
+    );
+  }
+}
+
+class _DashboardLogList {
+  final List<_DashboardLogFile> files;
+  final String runtimeFile;
+  final bool usingBridge;
+
+  const _DashboardLogList({
+    required this.files,
+    required this.runtimeFile,
+    required this.usingBridge,
+  });
+
+  factory _DashboardLogList.fromJson(
+    Map<String, dynamic> json, {
+    required bool usingBridge,
+  }) {
+    final rawFiles = json['files'];
+    final files = rawFiles is List
+        ? rawFiles
+            .whereType<Map>()
+            .map(
+              (item) => _DashboardLogFile.fromJson(
+                item.map((key, value) => MapEntry(key.toString(), value)),
+              ),
+            )
+            .where((entry) => entry.file.isNotEmpty)
+            .toList()
+        : <_DashboardLogFile>[];
+
+    return _DashboardLogList(
+      files: files,
+      runtimeFile: json['runtime_file']?.toString() ?? 'runtime.log',
+      usingBridge: usingBridge,
+    );
+  }
+}
+
+int _parseDashboardInt(dynamic value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.round();
+  }
+  return int.tryParse(value?.toString() ?? '') ?? 0;
+}
+
 Color _logLineColor(String line) {
   final lower = line.toLowerCase();
   if (lower.contains('warning')) return _orange;
@@ -2395,4 +2708,26 @@ String _formatUptime(int seconds) {
   if (days > 0) return '${days}d ${hours}h ${minutes}m';
   if (hours > 0) return '${hours}h ${minutes}m';
   return '${minutes}m';
+}
+
+String _formatBytes(int bytes) {
+  if (bytes >= 1024 * 1024) {
+    return '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB';
+  }
+  if (bytes >= 1024) {
+    return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  }
+  return '$bytes B';
+}
+
+String _formatLogTime(int modifiedMs) {
+  if (modifiedMs <= 0) {
+    return '--';
+  }
+  final value = DateTime.fromMillisecondsSinceEpoch(modifiedMs).toLocal();
+  final day = value.day.toString().padLeft(2, '0');
+  final month = value.month.toString().padLeft(2, '0');
+  final hour = value.hour.toString().padLeft(2, '0');
+  final minute = value.minute.toString().padLeft(2, '0');
+  return '$day/$month $hour:$minute';
 }
