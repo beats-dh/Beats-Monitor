@@ -238,6 +238,8 @@ class AppPt {
     'log_files_refresh': 'Atualizar arquivos de log',
     'log_files_empty':
         'Nenhum arquivo foi encontrado na pasta de logs configurada',
+    'log_files_api_unavailable':
+        'A API ativa ainda nao expoe a pasta de logs. Mostrando runtime.log pelo stream websocket.',
 
     // Tela de Chat
     'refresh_tooltip': 'Atualizar mensagens',

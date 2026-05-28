@@ -240,6 +240,8 @@ class AppEn {
     'runtime_log_clear': 'Reload log',
     'log_files_refresh': 'Refresh log files',
     'log_files_empty': 'No files were found under the configured logs folder',
+    'log_files_api_unavailable':
+        'The active API does not expose the log folder yet. Showing runtime.log from the websocket stream.',
 
     // Config Screen
     'appearance': 'Appearance',

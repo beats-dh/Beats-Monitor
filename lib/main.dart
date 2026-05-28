@@ -21,7 +21,7 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final configService = ConfigService();
   await configService.init();
-  
+
   final webSocketService = WebSocketService(configService);
   // Inicializa a conexão WebSocket uma única vez para todo o aplicativo
   webSocketService.manualReconnectMode = false;
@@ -40,9 +40,9 @@ void main() async {
   // Configurar SystemUI para edge-to-edge
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.dark,
+    statusBarIconBrightness: Brightness.light,
     systemNavigationBarColor: Colors.transparent,
-    systemNavigationBarIconBrightness: Brightness.dark,
+    systemNavigationBarIconBrightness: Brightness.light,
   ));
 
   // Habilitar edge-to-edge
@@ -68,7 +68,7 @@ class PenultimaMonitorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final localeProvider = context.watch<LocaleProvider>();
-    
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Penultima Monitor',
@@ -84,19 +84,19 @@ class PenultimaMonitorApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       theme: context.watch<ThemeProvider>().theme.copyWith(
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          systemOverlayStyle: SystemUiOverlayStyle(
-            statusBarColor: Colors.transparent,
-            statusBarIconBrightness: Brightness.dark,
-            systemNavigationBarColor: Colors.transparent,
-            systemNavigationBarIconBrightness: Brightness.dark,
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              systemOverlayStyle: SystemUiOverlayStyle(
+                statusBarColor: Colors.transparent,
+                statusBarIconBrightness: Brightness.light,
+                systemNavigationBarColor: Colors.transparent,
+                systemNavigationBarIconBrightness: Brightness.light,
+              ),
+              scrolledUnderElevation: 0,
+              surfaceTintColor: Colors.transparent,
+            ),
           ),
-          scrolledUnderElevation: 0,
-          surfaceTintColor: Colors.transparent,
-        ),
-      ),
       home: Consumer<AuthProvider>(
         builder: (context, authProvider, child) {
           if (authProvider.isAuthenticated) {

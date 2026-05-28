@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
@@ -10,6 +11,7 @@ import '../models/websocket_events.dart';
 import '../services/api_service.dart';
 import '../services/websocket_service.dart';
 import '../widgets/connection_status_popup.dart';
+import '../widgets/penultima_branding.dart';
 
 class _LogFileEntry {
   final String file;
@@ -62,6 +64,7 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
   bool _autoScroll = true;
   bool _isLoadingFiles = false;
   bool _isLoadingSnapshot = false;
+  bool _usingRuntimeFallback = false;
   String _fileName = 'runtime.log';
   String? _selectedLogFile = 'runtime.log';
   String? _statusMessage;
@@ -74,8 +77,12 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
     if (selected == null) {
       return true;
     }
-    final match = _logFiles.where((entry) => entry.file == selected).toList();
-    return match.isEmpty ? selected == 'runtime.log' : match.first.runtime;
+    for (final entry in _logFiles) {
+      if (entry.file == selected) {
+        return entry.runtime;
+      }
+    }
+    return selected == 'runtime.log';
   }
 
   @override
@@ -131,15 +138,13 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
         _fileName = event.file;
         _modifiedAt = event.modifiedAt;
         _size = event.size;
-        _statusMessage =
-            event.error ??
+        _statusMessage = event.error ??
             (event.missing
                 ? AppLocalizations.of(context).translate('runtime_log_missing')
                 : event.truncated
-                ? AppLocalizations.of(
-                    context,
-                  ).translate('runtime_log_truncated')
-                : null);
+                    ? AppLocalizations.of(context)
+                        .translate('runtime_log_truncated')
+                    : null);
 
         if (event.snapshot) {
           _lines.clear();
@@ -183,7 +188,9 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
 
     setState(() {
       _isLoadingFiles = true;
-      _statusMessage = null;
+      if (!_usingRuntimeFallback) {
+        _statusMessage = null;
+      }
     });
 
     try {
@@ -197,20 +204,20 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
       final rawFiles = dados['files'];
       final files = rawFiles is List
           ? rawFiles
-                .whereType<Map>()
-                .map(
-                  (item) => _LogFileEntry.fromJson(
-                    item.map((key, value) => MapEntry(key.toString(), value)),
-                  ),
-                )
-                .where((entry) => entry.file.isNotEmpty)
-                .toList()
+              .whereType<Map>()
+              .map(
+                (item) => _LogFileEntry.fromJson(
+                  item.map((key, value) => MapEntry(key.toString(), value)),
+                ),
+              )
+              .where((entry) => entry.file.isNotEmpty)
+              .toList()
           : <_LogFileEntry>[];
 
+      final runtimeFile = dados['runtime_file']?.toString() ?? 'runtime.log';
       String? nextSelection = _selectedLogFile;
       if (nextSelection == null ||
           !files.any((entry) => entry.file == nextSelection)) {
-        final runtimeFile = dados['runtime_file']?.toString() ?? 'runtime.log';
         nextSelection = files.any((entry) => entry.file == runtimeFile)
             ? runtimeFile
             : (files.isNotEmpty ? files.first.file : runtimeFile);
@@ -220,6 +227,7 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
         return;
       }
       setState(() {
+        _usingRuntimeFallback = false;
         _logFiles
           ..clear()
           ..addAll(files);
@@ -232,13 +240,11 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
       });
 
       await _loadSelectedLogSnapshot();
-    } catch (error) {
+    } catch (_) {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _statusMessage = error.toString();
-      });
+      _activateRuntimeFallback();
     } finally {
       if (mounted) {
         setState(() {
@@ -246,6 +252,28 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
         });
       }
     }
+  }
+
+  void _activateRuntimeFallback() {
+    final fallbackEntry = _LogFileEntry(
+      file: 'runtime.log',
+      size: _size,
+      modifiedMs: _modifiedAt?.millisecondsSinceEpoch ?? 0,
+      runtime: true,
+    );
+    setState(() {
+      _usingRuntimeFallback = true;
+      _isLoadingSnapshot = false;
+      _logFiles
+        ..clear()
+        ..add(fallbackEntry);
+      _logRoot = null;
+      _selectedLogFile = 'runtime.log';
+      _fileName = 'runtime.log';
+      _statusMessage =
+          AppLocalizations.of(context).translate('log_files_api_unavailable');
+    });
+    _requestRuntimeSnapshot();
   }
 
   String _responseMessage(dynamic data, int statusCode) {
@@ -260,6 +288,11 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
   Future<void> _loadSelectedLogSnapshot() async {
     final selected = _selectedLogFile;
     if (selected == null || selected.isEmpty || _isLoadingSnapshot) {
+      return;
+    }
+
+    if (_selectedRuntimeLog) {
+      _requestRuntimeSnapshot();
       return;
     }
 
@@ -321,13 +354,13 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
         ? (snapshot['lines'] as List).map((line) => line.toString()).toList()
         : <String>[];
 
-    final status =
-        snapshot['error']?.toString() ??
+    final status = snapshot['error']?.toString() ??
         (snapshot['missing'] == true
             ? AppLocalizations.of(context).translate('runtime_log_missing')
             : snapshot['truncated'] == true
-            ? AppLocalizations.of(context).translate('runtime_log_truncated')
-            : null);
+                ? AppLocalizations.of(context)
+                    .translate('runtime_log_truncated')
+                : null);
 
     setState(() {
       _fileName = snapshot['file']?.toString() ?? _selectedLogFile ?? _fileName;
@@ -349,12 +382,18 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _requestSnapshot() {
+  void _requestRuntimeSnapshot() {
     _ensureConnection();
-    unawaited(_loadSelectedLogSnapshot());
+    _subscribeRuntimeLog();
+    _webSocketService.sendMessage({'type': 'runtime_log_snapshot'});
+  }
+
+  void _requestSnapshot() {
     if (_selectedRuntimeLog) {
-      _webSocketService.sendMessage({'type': 'runtime_log_snapshot'});
+      _requestRuntimeSnapshot();
+      return;
     }
+    unawaited(_loadSelectedLogSnapshot());
   }
 
   Future<void> _selectLogFile(String file) async {
@@ -364,6 +403,12 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
       _lines.clear();
       _statusMessage = null;
     });
+
+    if (_selectedRuntimeLog) {
+      _requestRuntimeSnapshot();
+      return;
+    }
+
     await _loadSelectedLogSnapshot();
   }
 
@@ -398,17 +443,18 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
 
   Color _lineColor(BuildContext context, String line) {
     final lower = line.toLowerCase();
-    if (lower.contains('[error]') || lower.contains(' error')) {
-      return Colors.redAccent;
+    if (lower.contains('[error]') ||
+        lower.contains(' error') ||
+        lower.contains('exception')) {
+      return const Color(0xFFFF6A75);
     }
     if (lower.contains('[warning]') || lower.contains(' warning')) {
-      return Colors.orangeAccent;
+      return const Color(0xFFFFB347);
     }
     if (lower.contains('[debug]') || lower.contains('[trace]')) {
-      return Theme.of(context).textTheme.bodySmall?.color?.withAlpha(170) ??
-          Colors.grey;
+      return const Color(0xFF8E7B9F);
     }
-    return Theme.of(context).textTheme.bodyMedium?.color ?? Colors.white;
+    return const Color(0xFFE9DFF4);
   }
 
   String _formatSize(int bytes) {
@@ -426,93 +472,200 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
     final l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            const Icon(Icons.article_rounded),
-            const SizedBox(width: 12),
-            Text(l10n.translate('logs_title')),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(
-              _autoScroll
-                  ? Icons.vertical_align_bottom_rounded
-                  : Icons.vertical_align_center_rounded,
-            ),
-            tooltip: l10n.translate('runtime_log_autoscroll'),
-            onPressed: () {
-              setState(() {
-                _autoScroll = !_autoScroll;
-              });
-              if (_autoScroll) {
-                _scrollToBottom();
-              }
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.folder_open_rounded),
-            tooltip: l10n.translate('log_files_refresh'),
-            onPressed: _isLoadingFiles ? null : _loadLogFiles,
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: l10n.translate('refresh'),
-            onPressed: _isLoadingSnapshot ? null : _requestSnapshot,
-          ),
-          IconButton(
-            icon: const Icon(Icons.cleaning_services_rounded),
-            tooltip: l10n.translate('runtime_log_clear'),
-            onPressed: _clearLines,
-          ),
-          IconButton(
-            icon: Icon(_isConnected ? Icons.wifi : Icons.wifi_off),
-            tooltip: _isConnected
-                ? l10n.translate('connected_tooltip')
-                : l10n.translate('reconnect_tooltip'),
-            onPressed: _isConnected
-                ? null
-                : () {
-                    _webSocketService.reconnectManually();
-                    _subscribeRuntimeLog();
-                  },
-          ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: PenultimaBackdrop(
+        imageOpacity: 0.18,
+        child: SafeArea(
+          child: Stack(
             children: [
-              _buildStatusBar(context, l10n),
-              Expanded(
-                child: _isLoadingSnapshot && _lines.isEmpty
-                    ? const Center(child: CircularProgressIndicator())
-                    : _lines.isEmpty
-                    ? _buildEmptyState(context, l10n)
-                    : ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-                        itemCount: _lines.length,
-                        itemBuilder: (context, index) {
-                          final line = _lines[index];
-                          return SelectableText(
-                            line,
-                            style: TextStyle(
-                              fontFamily: 'monospace',
-                              fontSize: 12,
-                              height: 1.25,
-                              color: _lineColor(context, line),
-                            ),
-                          );
-                        },
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildHeader(context, l10n),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: PenultimaPanel(
+                        padding: EdgeInsets.zero,
+                        borderColor: const Color(0x557932B8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildStatusBar(context, l10n),
+                            Expanded(child: _buildLogBody(context, l10n)),
+                          ],
+                        ),
                       ),
+                    ),
+                  ],
+                ),
               ),
+              ConnectionStatusPopup(webSocketService: _webSocketService),
             ],
           ),
-          ConnectionStatusPopup(webSocketService: _webSocketService),
-        ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context, AppLocalizations l10n) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 650;
+        final title = Row(
+          children: [
+            _LogActionButton(
+              icon: Icons.arrow_back_rounded,
+              tooltip: l10n.translate('back'),
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
+            const SizedBox(width: 10),
+            if (!compact) ...[
+              Image.asset(
+                penultimaLogoAsset,
+                width: 46,
+                height: 46,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(width: 12),
+            ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.translate('logs_title'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _usingRuntimeFallback
+                        ? 'runtime.log websocket stream'
+                        : 'server logs command console',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: const Color(0xFFCDB7DD),
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+
+        final actions = _buildActionButtons(context, l10n);
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              title,
+              const SizedBox(height: 10),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(children: actions),
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: title),
+            ...actions,
+          ],
+        );
+      },
+    );
+  }
+
+  List<Widget> _buildActionButtons(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) {
+    return [
+      _LogActionButton(
+        icon: _autoScroll
+            ? Icons.vertical_align_bottom_rounded
+            : Icons.vertical_align_center_rounded,
+        tooltip: l10n.translate('runtime_log_autoscroll'),
+        onPressed: () {
+          setState(() {
+            _autoScroll = !_autoScroll;
+          });
+          if (_autoScroll) {
+            _scrollToBottom();
+          }
+        },
+      ),
+      _LogActionButton(
+        icon: MdiIcons.folderSearch,
+        tooltip: l10n.translate('log_files_refresh'),
+        onPressed: _isLoadingFiles ? null : _loadLogFiles,
+      ),
+      _LogActionButton(
+        icon: Icons.refresh_rounded,
+        tooltip: l10n.translate('refresh'),
+        onPressed: _isLoadingSnapshot ? null : _requestSnapshot,
+      ),
+      _LogActionButton(
+        icon: Icons.cleaning_services_rounded,
+        tooltip: l10n.translate('runtime_log_clear'),
+        onPressed: _clearLines,
+      ),
+      _LogActionButton(
+        icon: _isConnected ? Icons.wifi_rounded : Icons.wifi_off_rounded,
+        tooltip: _isConnected
+            ? l10n.translate('connected_tooltip')
+            : l10n.translate('reconnect_tooltip'),
+        onPressed: _isConnected
+            ? null
+            : () {
+                _webSocketService.reconnectManually();
+                _subscribeRuntimeLog();
+              },
+      ),
+    ];
+  }
+
+  Widget _buildLogBody(BuildContext context, AppLocalizations l10n) {
+    if (_isLoadingSnapshot && _lines.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFFD35CFF)),
+      );
+    }
+
+    if (_lines.isEmpty) {
+      return _buildEmptyState(context, l10n);
+    }
+
+    return DecoratedBox(
+      decoration: const BoxDecoration(color: Color(0xD607030C)),
+      child: Scrollbar(
+        controller: _scrollController,
+        child: ListView.builder(
+          controller: _scrollController,
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
+          itemCount: _lines.length,
+          itemBuilder: (context, index) {
+            final line = _lines[index];
+            return SelectableText(
+              line,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: MediaQuery.sizeOf(context).width < 520 ? 11 : 12,
+                height: 1.28,
+                color: _lineColor(context, line),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -525,73 +678,102 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
     final status = _statusMessage == null ? '' : ' - $_statusMessage';
     final selectedValue =
         _logFiles.any((entry) => entry.file == _selectedLogFile)
-        ? _selectedLogFile
-        : null;
+            ? _selectedLogFile
+            : null;
+    final meta =
+        '${_formatSize(_size)}$modified$status${_logRoot == null ? '' : ' - ${_logFiles.length} files'}';
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withAlpha(120),
+        color: const Color(0xEE120817),
         border: Border(
-          bottom: BorderSide(color: theme.dividerColor.withAlpha(120)),
+          bottom: BorderSide(color: theme.dividerColor.withAlpha(140)),
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        child: Row(
-          children: [
-            Icon(
-              _selectedRuntimeLog ? Icons.sync_rounded : Icons.article_rounded,
-              size: 20,
-              color: _selectedRuntimeLog
-                  ? (_isConnected ? Colors.green : Colors.orange)
-                  : theme.colorScheme.primary,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: selectedValue,
-                  isExpanded: true,
-                  menuMaxHeight: 420,
-                  hint: Text(_fileName),
-                  items: _logFiles.map((entry) {
-                    final modifiedAt = entry.modifiedMs > 0
-                        ? DateTime.fromMillisecondsSinceEpoch(
-                            entry.modifiedMs,
-                          ).toLocal().toString().split('.').first
-                        : '';
-                    final suffix = modifiedAt.isEmpty
-                        ? _formatSize(entry.size)
-                        : '${_formatSize(entry.size)} - $modifiedAt';
-                    return DropdownMenuItem<String>(
-                      value: entry.file,
-                      child: Text(
-                        '${entry.file}  ($suffix)',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: _isLoadingSnapshot || _isLoadingFiles
-                      ? null
-                      : (value) {
-                          if (value != null) {
-                            unawaited(_selectLogFile(value));
-                          }
-                        },
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 650;
+            final selector = Row(
+              children: [
+                Icon(
+                  _selectedRuntimeLog ? MdiIcons.consoleLine : Icons.article,
+                  size: 21,
+                  color: _selectedRuntimeLog
+                      ? (_isConnected
+                          ? const Color(0xFF55F28E)
+                          : const Color(0xFFFFB347))
+                      : const Color(0xFFD35CFF),
                 ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Flexible(
-              child: Text(
-                '${_formatSize(_size)}$modified$status${_logRoot == null ? '' : ' - ${_logFiles.length} files'}',
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w600,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: selectedValue,
+                      isExpanded: true,
+                      menuMaxHeight: 420,
+                      dropdownColor: const Color(0xFF160B21),
+                      hint: Text(_fileName),
+                      items: _logFiles.map((entry) {
+                        final modifiedAt = entry.modifiedMs > 0
+                            ? DateTime.fromMillisecondsSinceEpoch(
+                                entry.modifiedMs,
+                              ).toLocal().toString().split('.').first
+                            : '';
+                        final suffix = modifiedAt.isEmpty
+                            ? _formatSize(entry.size)
+                            : '${_formatSize(entry.size)} - $modifiedAt';
+                        return DropdownMenuItem<String>(
+                          value: entry.file,
+                          child: Text(
+                            '${entry.file}  ($suffix)',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: _isLoadingSnapshot || _isLoadingFiles
+                          ? null
+                          : (value) {
+                              if (value != null) {
+                                unawaited(_selectLogFile(value));
+                              }
+                            },
+                    ),
+                  ),
                 ),
+              ],
+            );
+
+            final metaText = Text(
+              meta,
+              maxLines: compact ? 2 : 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: const Color(0xFFE8D9F4),
+                fontWeight: FontWeight.w700,
               ),
-            ),
-          ],
+            );
+
+            if (compact) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  selector,
+                  const SizedBox(height: 6),
+                  metaText,
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                Expanded(child: selector),
+                const SizedBox(width: 12),
+                Flexible(child: metaText),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -606,25 +788,65 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.article_outlined,
-              size: 56,
-              color: theme.colorScheme.primary.withAlpha(180),
+              MdiIcons.textBoxSearchOutline,
+              size: 58,
+              color: const Color(0xFFD35CFF).withAlpha(205),
             ),
             const SizedBox(height: 12),
             Text(
               l10n.translate('runtime_log_empty'),
               textAlign: TextAlign.center,
               style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              l10n.translate('runtime_log_waiting'),
+              _statusMessage ?? l10n.translate('runtime_log_waiting'),
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: const Color(0xFFCDB7DD),
+              ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LogActionButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  const _LogActionButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 7),
+      child: Tooltip(
+        message: tooltip,
+        child: IconButton(
+          onPressed: onPressed,
+          icon: Icon(icon),
+          style: IconButton.styleFrom(
+            foregroundColor: const Color(0xFFF6EBFF),
+            disabledForegroundColor: const Color(0x777E6A8D),
+            backgroundColor: const Color(0x77160921),
+            disabledBackgroundColor: const Color(0x33160921),
+            hoverColor: const Color(0x558C35D7),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: const BorderSide(color: Color(0x44B44CFF)),
+            ),
+          ),
         ),
       ),
     );

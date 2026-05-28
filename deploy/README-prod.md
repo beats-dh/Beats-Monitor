@@ -81,6 +81,18 @@ also lists the complete recursive log folder through `GET /server/logs` and
 loads a selected file through `GET /server/logs/file/{encodedPath}`. This does
 not control, signal, reload, or restart the game process.
 
+If a static web build is published before the live API adapter has been updated,
+the Logs screen must keep working by falling back to the authenticated
+`runtime_log` WebSocket stream when `GET /server/logs` returns an unknown
+endpoint. In that fallback mode only `runtime.log` is available; the complete
+recursive folder appears automatically after the API adapter is activated.
+
+The branded web/PWA layout uses the Penultima assets under
+`assets/branding/`. Keep the web manifest, favicon, `web/icons/*`, and Android
+launcher icons regenerated from the same square Penultima logo when changing the
+app icon. The phone dashboard intentionally has a separate mobile-only layout,
+not just a scaled desktop rail.
+
 Outgoing monitor chat is queued in `beats_monitor_commands`. Keep
 `BEATS_MONITOR_ALLOW_CHAT_SEND=false` unless the game server build containing the
 command consumer has been deployed and the game process has restarted normally.
