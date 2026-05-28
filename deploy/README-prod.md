@@ -134,6 +134,13 @@ command tiles, runtime-log preview, log-file entry panel, and recent activity.
 The command-center dashboard refreshes those data panels in-place: every 10
 seconds it requests a runtime-log snapshot, server status, and Help/Private chat
 history for recent activity. Do not implement this as a browser/page reload.
+The dashboard runtime-log actions are expected to be real navigation/actions:
+refresh requests a fresh snapshot, copy writes the currently visible tail lines
+to the clipboard, and fullscreen opens the dedicated Logs screen initialized on
+`runtime.log`. The Log Files panel must show selected-file metadata separately
+from the total recursive file count, and both file rows and the open button must
+open `LogsScreen(initialFile: ...)` so selected logs can be read through the
+REST/PHP bridge fallback.
 The phone dashboard intentionally has a separate mobile-only layout, not just a
 scaled desktop rail. When changing the dashboard Dart code, bump the shared
 build id in `web/index.html`, `web/cache_reset.js`,

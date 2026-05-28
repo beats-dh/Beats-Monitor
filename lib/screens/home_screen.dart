@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:provider/provider.dart';
@@ -1498,6 +1499,23 @@ class _RuntimeLogPanel extends StatelessWidget {
     this.phone = false,
   });
 
+  Future<void> _copyLines(BuildContext context) async {
+    if (lines.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No runtime log lines to copy.')),
+      );
+      return;
+    }
+
+    await Clipboard.setData(ClipboardData(text: lines.join('\n')));
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Copied ${lines.length} runtime log lines.')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -1514,25 +1532,45 @@ class _RuntimeLogPanel extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _TinyIconButton(
+                    key: const ValueKey('runtime_log_refresh'),
                     icon: MdiIcons.refresh,
                     tooltip: 'Refresh runtime log',
                     onPressed: onRefresh,
                   ),
                   SizedBox(width: 6),
                   _TinyIconButton(
+                    key: const ValueKey('runtime_log_open_logs'),
                     icon: MdiIcons.folderOpenOutline,
                     tooltip: 'Open logs',
                     onPressed: () {
                       Navigator.push(
                         context,
-                        PageTransition<void>(child: const LogsScreen()),
+                        PageTransition<void>(
+                          child: const LogsScreen(initialFile: 'runtime.log'),
+                        ),
                       );
                     },
                   ),
                   SizedBox(width: 6),
                   _TinyIconButton(
+                    key: const ValueKey('runtime_log_copy'),
+                    icon: MdiIcons.contentCopy,
+                    tooltip: 'Copy runtime log',
+                    onPressed: lines.isEmpty ? null : () => _copyLines(context),
+                  ),
+                  SizedBox(width: 6),
+                  _TinyIconButton(
+                    key: const ValueKey('runtime_log_fullscreen'),
                     icon: MdiIcons.fullscreen,
                     tooltip: 'Fullscreen',
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        PageTransition<void>(
+                          child: const LogsScreen(initialFile: 'runtime.log'),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -1597,6 +1635,15 @@ class _LogFilesPanel extends StatelessWidget {
     this.phone = false,
   });
 
+  void _openLogFile(BuildContext context, _DashboardLogFile? file) {
+    Navigator.push(
+      context,
+      PageTransition<void>(
+        child: LogsScreen(initialFile: file?.file ?? 'runtime.log'),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     _DashboardLogFile? runtime;
@@ -1620,40 +1667,70 @@ class _LogFilesPanel extends StatelessWidget {
             trailing: _RefreshButton(onPressed: onRefresh),
           ),
           const SizedBox(height: 10),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: const Color(0xD80B0711),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0x554F1B79)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      selected?.file ?? 'Loading logs...',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    files.isEmpty ? '' : '${files.length}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: const Color(0xFFBDA7CE),
-                          fontWeight: FontWeight.w800,
+              onTap: selected == null
+                  ? null
+                  : () => _openLogFile(context, selected),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: const Color(0xD80B0711),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0x554F1B79)),
+                ),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              selected?.file ?? 'Loading logs...',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            if (files.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                '${files.length} log files available',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: const Color(0xFF9F8DAE),
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                              ),
+                            ],
+                          ],
                         ),
+                      ),
+                      Text(
+                        selected == null ? '' : _formatBytes(selected.size),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: const Color(0xFFBDA7CE),
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(
+                        Icons.keyboard_arrow_right_rounded,
+                        color: Colors.white70,
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  const Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    color: Colors.white70,
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -1679,20 +1756,16 @@ class _LogFilesPanel extends StatelessWidget {
                         name: file.file,
                         size: _formatBytes(file.size),
                         time: _formatLogTime(file.modifiedMs),
+                        onTap: () => _openLogFile(context, file),
                       );
                     },
                   ),
           ),
           const SizedBox(height: 10),
           FilledButton.icon(
-            onPressed: () {
-              Navigator.push(
-                context,
-                PageTransition<void>(child: const LogsScreen()),
-              );
-            },
+            onPressed: () => _openLogFile(context, selected),
             icon: Icon(MdiIcons.folderOpenOutline),
-            label: const Text('Open File'),
+            label: const Text('Open Selected File'),
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xAA6F1EB7),
               foregroundColor: Colors.white,
@@ -2234,46 +2307,56 @@ class _FileRow extends StatelessWidget {
   final String name;
   final String size;
   final String time;
+  final VoidCallback? onTap;
 
   const _FileRow({
     required this.name,
     required this.size,
     required this.time,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Icon(MdiIcons.fileDocumentOutline, size: 18, color: Colors.white54),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFFE7DAF2),
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-          ),
-          Text(
-            size,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: const Color(0xFF9F8DAE),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 5),
+          child: Row(
+            children: [
+              Icon(MdiIcons.fileDocumentOutline,
+                  size: 18, color: Colors.white54),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFFE7DAF2),
+                        fontWeight: FontWeight.w800,
+                      ),
                 ),
+              ),
+              Text(
+                size,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF9F8DAE),
+                    ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                time,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF9F8DAE),
+                    ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Text(
-            time,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: const Color(0xFF9F8DAE),
-                ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -2501,6 +2584,7 @@ class _TinyIconButton extends StatelessWidget {
   final VoidCallback? onPressed;
 
   const _TinyIconButton({
+    super.key,
     required this.icon,
     required this.tooltip,
     this.onPressed,

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:provider/provider.dart';
@@ -46,7 +47,9 @@ class _LogFileEntry {
 }
 
 class LogsScreen extends StatefulWidget {
-  const LogsScreen({super.key});
+  final String? initialFile;
+
+  const LogsScreen({super.key, this.initialFile});
 
   @override
   State<LogsScreen> createState() => _LogsScreenState();
@@ -95,10 +98,18 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _webSocketService = context.read<WebSocketService>();
     _isConnected = _webSocketService.connectionStatus;
+    final initialFile = widget.initialFile;
+    if (initialFile != null && initialFile.trim().isNotEmpty) {
+      _fileName = initialFile.trim();
+      _selectedLogFile = _fileName;
+    }
     _setupSubscriptions();
-    _ensureConnection();
-    _subscribeRuntimeLog();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _ensureConnection();
+      _subscribeRuntimeLog();
       _loadLogFiles();
     });
     _initialized = true;
@@ -504,6 +515,23 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
     _requestSnapshot();
   }
 
+  Future<void> _copyVisibleLines() async {
+    if (_lines.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No log lines to copy.')),
+      );
+      return;
+    }
+
+    await Clipboard.setData(ClipboardData(text: _lines.join('\n')));
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Copied ${_lines.length} log lines.')),
+    );
+  }
+
   Color _lineColor(BuildContext context, String line) {
     final lower = line.toLowerCase();
     if (lower.contains('[error]') ||
@@ -676,6 +704,11 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
         icon: Icons.refresh_rounded,
         tooltip: l10n.translate('refresh'),
         onPressed: _isLoadingSnapshot ? null : _requestSnapshot,
+      ),
+      _LogActionButton(
+        icon: Icons.content_copy_rounded,
+        tooltip: 'Copy visible log lines',
+        onPressed: _lines.isEmpty ? null : _copyVisibleLines,
       ),
       _LogActionButton(
         icon: Icons.cleaning_services_rounded,

@@ -1,8 +1,15 @@
 import 'package:beats_monitor/providers/auth_provider.dart';
 import 'package:beats_monitor/providers/locale_provider.dart';
 import 'package:beats_monitor/providers/theme_provider.dart';
+import 'package:beats_monitor/screens/banned_players_screen.dart';
+import 'package:beats_monitor/screens/chat_screen.dart';
+import 'package:beats_monitor/screens/config_screen.dart';
 import 'package:beats_monitor/screens/home_screen.dart';
 import 'package:beats_monitor/screens/live_screen.dart';
+import 'package:beats_monitor/screens/logs_screen.dart';
+import 'package:beats_monitor/screens/monitor_screen.dart';
+import 'package:beats_monitor/screens/online_players_screen.dart';
+import 'package:beats_monitor/screens/server_info_screen.dart';
 import 'package:beats_monitor/services/config_service.dart';
 import 'package:beats_monitor/services/websocket_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -111,14 +118,118 @@ void main() {
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -1200));
     await tester.pump();
     expect(find.text('Runtime Log (tail - live)'), findsOneWidget);
+    expect(find.byKey(const ValueKey('runtime_log_copy')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('runtime_log_fullscreen')), findsOneWidget);
 
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -360));
     await tester.pump();
 
     expect(find.text('Log Files'), findsOneWidget);
+    expect(find.text('Open Selected File'), findsOneWidget);
     expect(find.text('Server is starting up...'), findsNothing);
 
     webSocketService.dispose();
+  });
+
+  testWidgets('logs screen starts on the selected runtime file',
+      (tester) async {
+    setPhoneViewport(tester);
+    SharedPreferences.setMockInitialValues({'selected_locale': 'en'});
+    final prefs = await SharedPreferences.getInstance();
+    final configService = ConfigService();
+    final webSocketService = WebSocketService(configService)
+      ..manualReconnectMode = true;
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ChangeNotifierProvider(create: (_) => AuthProvider()),
+          ChangeNotifierProvider(create: (_) => LocaleProvider(prefs)),
+          ChangeNotifierProvider<ConfigService>.value(value: configService),
+          ChangeNotifierProvider<WebSocketService>.value(
+              value: webSocketService),
+        ],
+        child: const MaterialApp(
+          locale: Locale('en'),
+          supportedLocales: [
+            Locale('pt'),
+            Locale('en'),
+          ],
+          localizationsDelegates: [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: LogsScreen(initialFile: 'runtime.log'),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Logs'), findsOneWidget);
+    expect(find.textContaining('runtime.log'), findsWidgets);
+    expect(find.byTooltip('Copy visible log lines'), findsOneWidget);
+
+    webSocketService.dispose();
+  });
+
+  testWidgets('core feature screens render their first frame', (tester) async {
+    setDesktopViewport(tester);
+
+    final cases = <({Widget screen, String title})>[
+      (screen: const MonitorScreen(), title: 'Monitor'),
+      (screen: const ServerInfoScreen(), title: 'Server Info'),
+      (screen: const ChatScreen(), title: 'Chat'),
+      (screen: const OnlinePlayersScreen(), title: 'Online Players'),
+      (screen: const BannedPlayersScreen(), title: 'Banned Players'),
+      (screen: const LiveScreen(), title: 'Live'),
+      (screen: const LogsScreen(initialFile: 'runtime.log'), title: 'Logs'),
+      (screen: const ConfigScreen(), title: 'Settings'),
+    ];
+
+    for (final item in cases) {
+      SharedPreferences.setMockInitialValues({'selected_locale': 'en'});
+      final prefs = await SharedPreferences.getInstance();
+      final configService = ConfigService();
+      final webSocketService = WebSocketService(configService)
+        ..manualReconnectMode = true;
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => ThemeProvider()),
+            ChangeNotifierProvider(create: (_) => AuthProvider()),
+            ChangeNotifierProvider(create: (_) => LocaleProvider(prefs)),
+            ChangeNotifierProvider<ConfigService>.value(value: configService),
+            ChangeNotifierProvider<WebSocketService>.value(
+                value: webSocketService),
+          ],
+          child: MaterialApp(
+            locale: const Locale('en'),
+            supportedLocales: const [
+              Locale('pt'),
+              Locale('en'),
+            ],
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            home: item.screen,
+          ),
+        ),
+      );
+
+      await tester.pump();
+
+      expect(find.textContaining(item.title), findsWidgets);
+      webSocketService.dispose();
+    }
   });
 
   testWidgets('renders the Live entry and opens the Live screen',
