@@ -93,8 +93,14 @@ recursive folder appears automatically after the API adapter is activated.
 The branded web/PWA layout uses the Penultima assets under
 `assets/branding/`. Keep the web manifest, favicon, `web/icons/*`, and Android
 launcher icons regenerated from the same square Penultima logo when changing the
-app icon. The phone dashboard intentionally has a separate mobile-only layout,
-not just a scaled desktop rail.
+app icon. The authenticated home screen is a command-center shell: a desktop
+left operation rail, top server-time/status cards, a hero command banner,
+command tiles, runtime-log preview, log-file entry panel, and recent activity.
+The phone dashboard intentionally has a separate mobile-only layout, not just a
+scaled desktop rail. When changing the dashboard Dart code, bump the shared
+build id in `web/index.html`, `web/cache_reset.js`, and
+`web/flutter_bootstrap.js` before publishing so installed phones request the new
+`main.dart.js?v=<buildId>` bundle.
 
 Outgoing monitor chat is queued in `beats_monitor_commands`. Keep
 `BEATS_MONITOR_ALLOW_CHAT_SEND=false` unless the game server build containing the

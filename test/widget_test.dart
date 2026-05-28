@@ -102,9 +102,9 @@ void main() {
 
     await tester.pump();
 
-    expect(find.text('Penultima operations'), findsOneWidget);
+    expect(find.text('Command Center'), findsOneWidget);
     expect(find.text('Monitor'), findsOneWidget);
-    expect(find.text('Logs'), findsOneWidget);
+    expect(find.byKey(const ValueKey('home_tile_Monitor')), findsOneWidget);
 
     webSocketService.dispose();
   });
@@ -146,16 +146,13 @@ void main() {
     );
 
     await tester.pump();
-    await tester.scrollUntilVisible(
-      find.text('Live'),
-      300,
-      scrollable: find.byType(Scrollable),
-    );
-
-    expect(find.text('Live'), findsOneWidget);
+    expect(find.byKey(const ValueKey('home_tile_Live')), findsOneWidget);
     expect(find.text('Live local client view'), findsOneWidget);
 
-    await tester.tap(find.text('Live').hitTestable());
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -280));
+    await tester.pump();
+    await tester
+        .tap(find.byKey(const ValueKey('home_tile_Live')).hitTestable());
     await tester.pumpAndSettle();
 
     expect(find.text('Ready - Character: Waldir'), findsOneWidget);
