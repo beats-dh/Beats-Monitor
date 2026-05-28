@@ -26,6 +26,13 @@ Publish `D:\Server\Beats-Monitor\build\web` to:
 /home/penultima/ultima-myaac/beats-monitor
 ```
 
+Before publishing, verify the generated files in `build\web`, not only the
+source files under `web\`. `index.html`, `cache_reset.js`, and
+`flutter_bootstrap.js` must all contain the same build id, and the deployed
+`cache_reset.js` hash should match `build\web\cache_reset.js`. A stale generated
+`cache_reset.js` can leave installed phone PWAs on an older Dart bundle even when
+`main.dart.js` has already been uploaded.
+
 ## Backend Files
 
 Copy these files to the game host:
@@ -89,6 +96,12 @@ the Logs screen must keep working by falling back to the authenticated
 `runtime_log` WebSocket stream when `GET /server/logs` returns an unknown
 endpoint. In that fallback mode only `runtime.log` is available; the complete
 recursive folder appears automatically after the API adapter is activated.
+Static file deployment alone cannot add these routes to the running Node
+adapter. For a no-restart verification, check that the live adapter file contains
+`server/logs` and `runtime_log_snapshot`, and check the running process start
+time separately. If the process is still an older adapter, the UI fallback is the
+only behavior available until the adapter is activated during an approved
+maintenance window.
 
 The branded web/PWA layout uses the Penultima assets under
 `assets/branding/`. Keep the web manifest, favicon, `web/icons/*`, and Android
