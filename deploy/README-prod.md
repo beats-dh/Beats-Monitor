@@ -104,6 +104,15 @@ also lists the complete recursive log folder through `GET /server/logs` and
 loads a selected file through `GET /server/logs/file/{encodedPath}`. This does
 not control, signal, reload, or restart the game process.
 
+When the live Node adapter cannot be restarted yet, publish
+`web/beats_monitor_logs.php` with the static bundle. It is executed from
+`/beats-monitor/beats_monitor_logs.php`, validates the same monitor bearer token
+against the running API's `GET /api/v1/server/status`, then exposes the same
+read-only recursive log list and tail snapshots from the server logs folder.
+This bridge is a no-restart compatibility path for an older running API process;
+keep it protected by the bearer-token validation and remove the dependency only
+after the Node adapter with native `server/logs` routes is active.
+
 If a static web build is published before the live API adapter has been updated,
 the Logs screen must keep working by falling back to the authenticated
 `runtime_log` WebSocket stream when `GET /server/logs` returns an unknown

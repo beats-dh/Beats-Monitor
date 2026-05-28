@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:provider/provider.dart';
 
@@ -9,6 +10,7 @@ import '../l10n/app_localizations.dart';
 import '../models/events.dart';
 import '../models/websocket_events.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../services/websocket_service.dart';
 import '../widgets/connection_status_popup.dart';
 import '../widgets/penultima_branding.dart';
@@ -52,6 +54,7 @@ class LogsScreen extends StatefulWidget {
 
 class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
   static const int _maxLines = 3000;
+  static const Duration _logsBridgeTimeout = Duration(seconds: 10);
 
   final ScrollController _scrollController = ScrollController();
   final List<String> _lines = [];
@@ -65,6 +68,7 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
   bool _isLoadingFiles = false;
   bool _isLoadingSnapshot = false;
   bool _usingRuntimeFallback = false;
+  bool _usingLogsBridge = false;
   String _fileName = 'runtime.log';
   String? _selectedLogFile = 'runtime.log';
   String? _statusMessage;
@@ -123,7 +127,7 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
 
   void _setupSubscriptions() {
     _logSubscription = _webSocketService.runtimeLogStream.listen((event) {
-      if (!mounted || !_selectedRuntimeLog) {
+      if (!mounted || !_selectedRuntimeLog || _usingLogsBridge) {
         return;
       }
 
@@ -194,57 +198,18 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
     });
 
     try {
-      final response = await ApiService.get('server/logs');
-      final data = json.decode(utf8.decode(response.bodyBytes));
-      if (response.statusCode != 200 || data is! Map || data['dados'] is! Map) {
-        throw Exception(_responseMessage(data, response.statusCode));
-      }
-
-      final dados = data['dados'] as Map;
-      final rawFiles = dados['files'];
-      final files = rawFiles is List
-          ? rawFiles
-              .whereType<Map>()
-              .map(
-                (item) => _LogFileEntry.fromJson(
-                  item.map((key, value) => MapEntry(key.toString(), value)),
-                ),
-              )
-              .where((entry) => entry.file.isNotEmpty)
-              .toList()
-          : <_LogFileEntry>[];
-
-      final runtimeFile = dados['runtime_file']?.toString() ?? 'runtime.log';
-      String? nextSelection = _selectedLogFile;
-      if (nextSelection == null ||
-          !files.any((entry) => entry.file == nextSelection)) {
-        nextSelection = files.any((entry) => entry.file == runtimeFile)
-            ? runtimeFile
-            : (files.isNotEmpty ? files.first.file : runtimeFile);
-      }
-
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _usingRuntimeFallback = false;
-        _logFiles
-          ..clear()
-          ..addAll(files);
-        _logRoot = dados['root']?.toString();
-        _selectedLogFile = nextSelection;
-        _fileName = nextSelection ?? 'runtime.log';
-        _statusMessage = files.isEmpty
-            ? AppLocalizations.of(context).translate('log_files_empty')
-            : null;
-      });
-
+      _applyLogFileList(await _fetchApiLogList(), usingBridge: false);
       await _loadSelectedLogSnapshot();
     } catch (_) {
-      if (!mounted) {
-        return;
+      try {
+        _applyLogFileList(await _fetchBridgeLogList(), usingBridge: true);
+        await _loadSelectedLogSnapshot();
+      } catch (_) {
+        if (!mounted) {
+          return;
+        }
+        _activateRuntimeFallback();
       }
-      _activateRuntimeFallback();
     } finally {
       if (mounted) {
         setState(() {
@@ -252,6 +217,60 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
         });
       }
     }
+  }
+
+  Future<Map<String, dynamic>> _fetchApiLogList() async {
+    return _decodeDadosResponse(await ApiService.get('server/logs'));
+  }
+
+  Future<Map<String, dynamic>> _fetchBridgeLogList() async {
+    return _decodeDadosResponse(
+      await _getLogsBridge({'action': 'list'}),
+    );
+  }
+
+  void _applyLogFileList(
+    Map<String, dynamic> dados, {
+    required bool usingBridge,
+  }) {
+    final rawFiles = dados['files'];
+    final files = rawFiles is List
+        ? rawFiles
+            .whereType<Map>()
+            .map(
+              (item) => _LogFileEntry.fromJson(
+                item.map((key, value) => MapEntry(key.toString(), value)),
+              ),
+            )
+            .where((entry) => entry.file.isNotEmpty)
+            .toList()
+        : <_LogFileEntry>[];
+
+    final runtimeFile = dados['runtime_file']?.toString() ?? 'runtime.log';
+    String? nextSelection = _selectedLogFile;
+    if (nextSelection == null ||
+        !files.any((entry) => entry.file == nextSelection)) {
+      nextSelection = files.any((entry) => entry.file == runtimeFile)
+          ? runtimeFile
+          : (files.isNotEmpty ? files.first.file : runtimeFile);
+    }
+
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _usingRuntimeFallback = false;
+      _usingLogsBridge = usingBridge;
+      _logFiles
+        ..clear()
+        ..addAll(files);
+      _logRoot = dados['root']?.toString();
+      _selectedLogFile = nextSelection;
+      _fileName = nextSelection ?? 'runtime.log';
+      _statusMessage = files.isEmpty
+          ? AppLocalizations.of(context).translate('log_files_empty')
+          : null;
+    });
   }
 
   void _activateRuntimeFallback() {
@@ -263,6 +282,7 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
     );
     setState(() {
       _usingRuntimeFallback = true;
+      _usingLogsBridge = false;
       _isLoadingSnapshot = false;
       _logFiles
         ..clear()
@@ -291,7 +311,7 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
       return;
     }
 
-    if (_selectedRuntimeLog) {
+    if (_selectedRuntimeLog && !_usingLogsBridge) {
       _requestRuntimeSnapshot();
       return;
     }
@@ -302,18 +322,25 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
     });
 
     try {
-      final endpoint = 'server/logs/file/${Uri.encodeComponent(selected)}';
-      final response = await ApiService.get(endpoint);
-      final data = json.decode(utf8.decode(response.bodyBytes));
-      if (response.statusCode != 200 || data is! Map || data['dados'] is! Map) {
-        throw Exception(_responseMessage(data, response.statusCode));
-      }
-
-      final snapshot = (data['dados'] as Map).map(
-        (key, value) => MapEntry(key.toString(), value),
-      );
+      final snapshot = _usingLogsBridge
+          ? await _fetchBridgeLogSnapshot(selected)
+          : await _fetchApiLogSnapshot(selected);
       _applySnapshot(snapshot);
     } catch (error) {
+      if (!_usingLogsBridge) {
+        try {
+          final snapshot = await _fetchBridgeLogSnapshot(selected);
+          if (mounted) {
+            setState(() {
+              _usingLogsBridge = true;
+            });
+          }
+          _applySnapshot(snapshot);
+          return;
+        } catch (_) {
+          // Keep the original API error visible below.
+        }
+      }
       if (!mounted) {
         return;
       }
@@ -328,6 +355,42 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
         });
       }
     }
+  }
+
+  Future<Map<String, dynamic>> _fetchApiLogSnapshot(String selected) async {
+    final endpoint = 'server/logs/file/${Uri.encodeComponent(selected)}';
+    return _decodeDadosResponse(await ApiService.get(endpoint));
+  }
+
+  Future<Map<String, dynamic>> _fetchBridgeLogSnapshot(String selected) async {
+    return _decodeDadosResponse(
+      await _getLogsBridge({
+        'action': 'file',
+        'path': selected,
+      }),
+    );
+  }
+
+  Future<http.Response> _getLogsBridge(Map<String, String> query) async {
+    if (AuthService.hasCredentials) {
+      await AuthService.refreshToken();
+    }
+    final uri = Uri.base
+        .resolve('beats_monitor_logs.php')
+        .replace(queryParameters: query);
+    return http
+        .get(uri, headers: AuthService.authHeaders)
+        .timeout(_logsBridgeTimeout);
+  }
+
+  Map<String, dynamic> _decodeDadosResponse(http.Response response) {
+    final data = json.decode(utf8.decode(response.bodyBytes));
+    if (response.statusCode != 200 || data is! Map || data['dados'] is! Map) {
+      throw Exception(_responseMessage(data, response.statusCode));
+    }
+    return (data['dados'] as Map).map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
   }
 
   void _applySnapshot(Map<String, dynamic> snapshot) {
@@ -389,7 +452,7 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
   }
 
   void _requestSnapshot() {
-    if (_selectedRuntimeLog) {
+    if (_selectedRuntimeLog && !_usingLogsBridge) {
       _requestRuntimeSnapshot();
       return;
     }
@@ -404,7 +467,7 @@ class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
       _statusMessage = null;
     });
 
-    if (_selectedRuntimeLog) {
+    if (_selectedRuntimeLog && !_usingLogsBridge) {
       _requestRuntimeSnapshot();
       return;
     }
