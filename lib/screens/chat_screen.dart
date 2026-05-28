@@ -11,6 +11,16 @@ import '../services/api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
+const _gameChatBackground = Color(0xFF0B080A);
+const _gameChatPanel = Color(0xFF151013);
+const _gameChatBorder = Color(0xFF31222B);
+const _gameChatRed = Color(0xFFFF4F4F);
+const _gameChatOrange = Color(0xFFFFA319);
+const _gameChatYellow = Color(0xFFFFEC3D);
+const _gameChatGreen = Color(0xFF63F05F);
+const _gameChatPrivate = Color(0xFFFF6BD6);
+const _monitorPlayerLevel = 2000;
+
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
 
@@ -57,18 +67,18 @@ class _ChatScreenState extends State<ChatScreen>
   Color get _channelColor {
     switch (_selectedChannel) {
       case 'local':
+        return _gameChatYellow;
       case 'global':
-        return Colors.orange;
-      case 'trade':
-        return Colors.green;
       case 'help':
-        return Colors.orange;
+        return _gameChatOrange;
+      case 'trade':
+        return _gameChatGreen;
       case 'private':
-        return Colors.pink;
+        return _gameChatPrivate;
       case 'commands':
-        return Colors.redAccent;
+        return _gameChatRed;
       default:
-        return Colors.orange;
+        return _gameChatOrange;
     }
   }
 
@@ -561,19 +571,19 @@ class _ChatScreenState extends State<ChatScreen>
         });
 
         // Monitora o status da conexão
-        _connectionSubscription = _webSocketService.connectionStatusStream
-            .listen((isConnected) {
-              if (mounted) {
-                setState(() {
-                  _isConnected = isConnected;
-                });
-
-                // Se a conexão foi estabelecida, solicita o histórico
-                if (isConnected && !_requestedHistory) {
-                  _requestChatHistory();
-                }
-              }
+        _connectionSubscription =
+            _webSocketService.connectionStatusStream.listen((isConnected) {
+          if (mounted) {
+            setState(() {
+              _isConnected = isConnected;
             });
+
+            // Se a conexão foi estabelecida, solicita o histórico
+            if (isConnected && !_requestedHistory) {
+              _requestChatHistory();
+            }
+          }
+        });
 
         // Garante que temos uma conexão WebSocket
         _ensureConnection();
@@ -666,7 +676,69 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   String _formatChatTime(DateTime timestamp) {
-    return '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
+    return '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}:${timestamp.second.toString().padLeft(2, '0')}';
+  }
+
+  _ChatLineParts _chatLineParts(
+    ChatMessage message, {
+    String? displayMessage,
+    String? displayPlayer,
+  }) {
+    final player = (displayPlayer ?? message.player).trim();
+    var level = message.level;
+    var text = (displayMessage ?? message.message).trimLeft();
+    final escapedPlayer = RegExp.escape(player);
+    final levelPrefix = RegExp(
+      '^$escapedPlayer\\s+\\[(\\d+)\\]:\\s*(.*)\$',
+      caseSensitive: false,
+    ).firstMatch(text);
+
+    if (levelPrefix != null) {
+      level = int.tryParse(levelPrefix.group(1) ?? '') ?? level;
+      text = levelPrefix.group(2) ?? '';
+    } else {
+      final namePrefix = RegExp(
+        '^$escapedPlayer:\\s*(.*)\$',
+        caseSensitive: false,
+      ).firstMatch(text);
+      if (namePrefix != null) {
+        text = namePrefix.group(1) ?? '';
+      }
+    }
+
+    if (level <= 0 && _sameName(player, _monitorPlayerName)) {
+      level = _monitorPlayerLevel;
+    }
+
+    return _ChatLineParts(player: player, level: level, text: text);
+  }
+
+  Color _lineColorForMessage(ChatMessage message, _ChatLineParts parts) {
+    final text = parts.text.trimLeft();
+    final mine = _sameName(parts.player, _monitorPlayerName) ||
+        _sameName(message.player, _monitorPlayerName);
+
+    if (_isCommandText(text)) {
+      return _gameChatRed;
+    }
+
+    switch (message.channel) {
+      case 'chat_private':
+        return mine ? _gameChatRed : _gameChatPrivate;
+      case 'chat_local':
+        return _gameChatYellow;
+      case 'chat_trade':
+        return mine || parts.level >= _monitorPlayerLevel
+            ? _gameChatOrange
+            : _gameChatGreen;
+      case 'chat_help':
+      case 'chat_global':
+        return mine || parts.level >= _monitorPlayerLevel
+            ? _gameChatOrange
+            : _gameChatYellow;
+      default:
+        return _channelColor;
+    }
   }
 
   void _selectChannel(String channel) {
@@ -713,9 +785,8 @@ class _ChatScreenState extends State<ChatScreen>
                 backgroundColor: _selectedChannel == 'local'
                     ? _channelColor.withAlpha(25)
                     : null,
-                foregroundColor: _selectedChannel == 'local'
-                    ? _channelColor
-                    : null,
+                foregroundColor:
+                    _selectedChannel == 'local' ? _channelColor : null,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(_getAdaptivePadding(20)),
                   side: BorderSide(
@@ -738,9 +809,8 @@ class _ChatScreenState extends State<ChatScreen>
                 backgroundColor: _selectedChannel == 'global'
                     ? _channelColor.withAlpha(25)
                     : null,
-                foregroundColor: _selectedChannel == 'global'
-                    ? _channelColor
-                    : null,
+                foregroundColor:
+                    _selectedChannel == 'global' ? _channelColor : null,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(_getAdaptivePadding(20)),
                   side: BorderSide(
@@ -763,9 +833,8 @@ class _ChatScreenState extends State<ChatScreen>
                 backgroundColor: _selectedChannel == 'trade'
                     ? _channelColor.withAlpha(25)
                     : null,
-                foregroundColor: _selectedChannel == 'trade'
-                    ? _channelColor
-                    : null,
+                foregroundColor:
+                    _selectedChannel == 'trade' ? _channelColor : null,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(_getAdaptivePadding(20)),
                   side: BorderSide(
@@ -788,9 +857,8 @@ class _ChatScreenState extends State<ChatScreen>
                 backgroundColor: _selectedChannel == 'help'
                     ? _channelColor.withAlpha(25)
                     : null,
-                foregroundColor: _selectedChannel == 'help'
-                    ? _channelColor
-                    : null,
+                foregroundColor:
+                    _selectedChannel == 'help' ? _channelColor : null,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(_getAdaptivePadding(20)),
                   side: BorderSide(
@@ -813,9 +881,8 @@ class _ChatScreenState extends State<ChatScreen>
                 backgroundColor: _selectedChannel == 'private'
                     ? _channelColor.withAlpha(25)
                     : null,
-                foregroundColor: _selectedChannel == 'private'
-                    ? _channelColor
-                    : null,
+                foregroundColor:
+                    _selectedChannel == 'private' ? _channelColor : null,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(_getAdaptivePadding(20)),
                   side: BorderSide(
@@ -838,9 +905,8 @@ class _ChatScreenState extends State<ChatScreen>
                 backgroundColor: _selectedChannel == 'commands'
                     ? _channelColor.withAlpha(25)
                     : null,
-                foregroundColor: _selectedChannel == 'commands'
-                    ? _channelColor
-                    : null,
+                foregroundColor:
+                    _selectedChannel == 'commands' ? _channelColor : null,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(_getAdaptivePadding(20)),
                   side: BorderSide(
@@ -863,9 +929,8 @@ class _ChatScreenState extends State<ChatScreen>
                 backgroundColor: _selectedChannel == 'broadcast'
                     ? _channelColor.withAlpha(25)
                     : null,
-                foregroundColor: _selectedChannel == 'broadcast'
-                    ? _channelColor
-                    : null,
+                foregroundColor:
+                    _selectedChannel == 'broadcast' ? _channelColor : null,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(_getAdaptivePadding(20)),
                   side: BorderSide(
@@ -890,59 +955,41 @@ class _ChatScreenState extends State<ChatScreen>
 
   Widget _buildMessageBubble(
     ChatMessage message,
-    bool isMe, {
+    bool _, {
     String? displayMessage,
     String? displayPlayer,
   }) {
-    final theme = Theme.of(context);
-    final bubblePadding = _getAdaptivePadding(8);
-    final contentPadding = _getAdaptivePadding(16);
+    final parts = _chatLineParts(
+      message,
+      displayMessage: displayMessage,
+      displayPlayer: displayPlayer,
+    );
+    final lineColor = _lineColorForMessage(message, parts);
+    final lineFontSize = _getAdaptiveFontSize(_isWindows ? 13 : 14);
 
     return Padding(
       padding: EdgeInsets.symmetric(
-        vertical: bubblePadding / 2,
-        horizontal: bubblePadding,
+        vertical: _getAdaptivePadding(1),
+        horizontal: _getAdaptivePadding(8),
       ),
-      child: Card(
-        child: ListTile(
-          contentPadding: EdgeInsets.symmetric(
-            horizontal: contentPadding,
-            vertical: bubblePadding,
+      child: RichText(
+        text: TextSpan(
+          style: TextStyle(
+            color: lineColor,
+            fontFamily: 'monospace',
+            fontSize: lineFontSize,
+            fontWeight: FontWeight.w700,
+            height: 1.18,
           ),
-          title: RichText(
-            text: TextSpan(
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.textTheme.bodyLarge?.color,
-                fontSize: _getAdaptiveFontSize(14),
-              ),
-              children: [
-                TextSpan(
-                  text: _formatChatTime(message.timestamp),
-                  style: const TextStyle(color: Colors.grey),
-                ),
-                const TextSpan(text: ' '),
-                TextSpan(
-                  text: displayPlayer ?? message.player,
-                  style: TextStyle(
-                    color: _channelColor,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                TextSpan(
-                  text: ' [${message.level}]: ',
-                  style: const TextStyle(color: Colors.grey),
-                ),
-                TextSpan(
-                  text: displayMessage ?? message.message,
-                  style: TextStyle(
-                    color: theme.textTheme.bodyLarge?.color,
-                    fontSize: _getAdaptiveFontSize(15),
-                    height: 1.2,
-                  ),
-                ),
-              ],
+          children: [
+            TextSpan(text: '${_formatChatTime(message.timestamp)} '),
+            TextSpan(
+              text: parts.player,
+              style: const TextStyle(fontWeight: FontWeight.w900),
             ),
-          ),
+            TextSpan(text: ' [${parts.level}]: '),
+            TextSpan(text: parts.text),
+          ],
         ),
       ),
     );
@@ -964,8 +1011,8 @@ class _ChatScreenState extends State<ChatScreen>
 
     final selected =
         _selectedPrivatePeer != null && peers.contains(_selectedPrivatePeer)
-        ? _selectedPrivatePeer!
-        : peers.first;
+            ? _selectedPrivatePeer!
+            : peers.first;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.symmetric(
@@ -1004,8 +1051,8 @@ class _ChatScreenState extends State<ChatScreen>
     final peers = _privatePeers();
     final selectedPeer =
         _selectedPrivatePeer != null && peers.contains(_selectedPrivatePeer)
-        ? _selectedPrivatePeer
-        : (peers.isNotEmpty ? peers.first : null);
+            ? _selectedPrivatePeer
+            : (peers.isNotEmpty ? peers.first : null);
     final messages = selectedPeer == null
         ? <ChatMessage>[]
         : _privateMessagesFor(selectedPeer);
@@ -1174,56 +1221,12 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  // Adapta o conteúdo da tela quando não há conexão
-  Widget _buildNoConnectionContent(
-    BuildContext context,
-    AppLocalizations l10n,
-  ) {
-    final iconSize = _isWindows
-        ? MediaQuery.of(context).size.width * 0.08
-        : MediaQuery.of(context).size.width * 0.15;
-
-    final fontSize = _isWindows
-        ? MediaQuery.of(context).size.width * 0.022
-        : MediaQuery.of(context).size.width * 0.045;
-
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.cloud_off, size: iconSize, color: Colors.grey),
-          SizedBox(height: MediaQuery.of(context).size.height * 0.02),
-          Text(
-            l10n.translate('no_server_connection'),
-            style: TextStyle(fontSize: fontSize, color: Colors.grey),
-          ),
-          SizedBox(height: _getAdaptivePadding(20)),
-          ElevatedButton.icon(
-            onPressed: _ensureConnection,
-            icon: const Icon(Icons.refresh),
-            style: _isWindows
-                ? ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    textStyle: const TextStyle(fontSize: 14),
-                  )
-                : null,
-            label: Text(l10n.translate('try_connect')),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _loadBroadcastHistory() async {
     final prefs = await SharedPreferences.getInstance();
     final list = prefs.getStringList('broadcast_history') ?? [];
     setState(() {
-      _broadcastHistory = list
-          .map((e) => json.decode(e) as Map<String, dynamic>)
-          .toList();
+      _broadcastHistory =
+          list.map((e) => json.decode(e) as Map<String, dynamic>).toList();
     });
   }
 
@@ -1306,22 +1309,13 @@ class _ChatScreenState extends State<ChatScreen>
             children: [
               _buildChannelSelector(),
               const Divider(height: 1),
-              Expanded(
-                child: StreamBuilder<bool>(
-                  stream: websocketService.connectionStatusStream,
-                  initialData: websocketService.connectionStatus,
-                  builder: (context, connectionSnapshot) {
-                    if (!connectionSnapshot.data!) {
-                      return _buildNoConnectionContent(context, l10n);
-                    }
-
-                    return _buildMessageList();
-                  },
-                ),
-              ),
+              Expanded(child: _buildMessageList()),
               Container(
                 decoration: BoxDecoration(
-                  color: theme.cardColor,
+                  color: _gameChatPanel,
+                  border: const Border(
+                    top: BorderSide(color: _gameChatBorder),
+                  ),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withAlpha(25),
@@ -1343,13 +1337,11 @@ class _ChatScreenState extends State<ChatScreen>
                           maxHeight: _isWindows ? 80 : 120,
                         ),
                         decoration: BoxDecoration(
-                          color: theme.scaffoldBackgroundColor,
+                          color: _gameChatBackground,
                           borderRadius: BorderRadius.circular(
                             _isWindows ? 16 : 24,
                           ),
-                          border: Border.all(
-                            color: theme.dividerColor.withAlpha(25),
-                          ),
+                          border: Border.all(color: _gameChatBorder),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
@@ -1375,9 +1367,12 @@ class _ChatScreenState extends State<ChatScreen>
                                 keyboardType: TextInputType.multiline,
                                 textInputAction: TextInputAction.newline,
                                 style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: _channelColor,
+                                  fontFamily: 'monospace',
+                                  fontWeight: FontWeight.w700,
                                   fontSize: _getAdaptiveFontSize(14),
                                 ),
-                                enabled: !_isSending && _isConnected,
+                                enabled: !_isSending,
                                 onSubmitted: (text) {
                                   if (text.isNotEmpty) {
                                     _sendMessage(text);
@@ -1391,7 +1386,7 @@ class _ChatScreenState extends State<ChatScreen>
                                 bottom: _getAdaptivePadding(4),
                               ),
                               child: IconButton(
-                                onPressed: (_isSending || !_isConnected)
+                                onPressed: _isSending
                                     ? null
                                     : () {
                                         final text = _messageController.text;
@@ -1405,10 +1400,8 @@ class _ChatScreenState extends State<ChatScreen>
                                   padding: EdgeInsets.all(
                                     _getAdaptivePadding(10),
                                   ),
-                                  disabledBackgroundColor: theme
-                                      .colorScheme
-                                      .primary
-                                      .withAlpha(102),
+                                  disabledBackgroundColor:
+                                      theme.colorScheme.primary.withAlpha(102),
                                 ),
                                 icon: _isSending
                                     ? SizedBox(
@@ -1418,8 +1411,8 @@ class _ChatScreenState extends State<ChatScreen>
                                           strokeWidth: _isWindows ? 1.5 : 2,
                                           valueColor:
                                               AlwaysStoppedAnimation<Color>(
-                                                Colors.white.withAlpha(255),
-                                              ),
+                                            Colors.white.withAlpha(255),
+                                          ),
                                         ),
                                       )
                                     : Icon(
@@ -1443,4 +1436,16 @@ class _ChatScreenState extends State<ChatScreen>
       ),
     );
   }
+}
+
+class _ChatLineParts {
+  final String player;
+  final int level;
+  final String text;
+
+  const _ChatLineParts({
+    required this.player,
+    required this.level,
+    required this.text,
+  });
 }

@@ -1,5 +1,5 @@
 (function () {
-  const buildId = "2026-05-28-command-center-7";
+  const buildId = "2026-05-28-command-center-9";
   const storageKey = "penultima-monitor-static-build";
 
   async function resetOldFlutterCache() {

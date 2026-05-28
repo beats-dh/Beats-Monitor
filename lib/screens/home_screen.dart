@@ -37,6 +37,7 @@ const _panel = Color(0xDE090610);
 const _border = Color(0x664F1B79);
 const _serverClientVersion = '15.23';
 const _serverProtocolVersion = '1523';
+const _dashboardRefreshInterval = Duration(seconds: 10);
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -50,9 +51,10 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<_DashboardLogFile> _logFiles = <_DashboardLogFile>[];
   final List<_ActivityEvent> _activity = <_ActivityEvent>[];
   Timer? _clockTimer;
-  Timer? _logRefreshTimer;
+  Timer? _dashboardRefreshTimer;
   DateTime _now = DateTime.now();
   bool _streamsReady = false;
+  bool _dashboardRefreshInProgress = false;
   bool _logsLoading = false;
   events.ServerStatus? _serverStatus;
   SystemData? _systemData;
@@ -60,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<SystemData>? _systemDataSubscription;
   StreamSubscription<events.ChatMessage>? _chatSubscription;
   StreamSubscription<events.RuntimeLogEvent>? _runtimeSubscription;
+  WebSocketService? _webSocket;
 
   @override
   void initState() {
@@ -69,7 +72,6 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() => _now = DateTime.now());
       }
     });
-    _seedPreviewData();
   }
 
   @override
@@ -88,40 +90,35 @@ class _HomeScreenState extends State<HomeScreen> {
     _systemDataSubscription?.cancel();
     _chatSubscription?.cancel();
     _runtimeSubscription?.cancel();
-    _logRefreshTimer?.cancel();
+    _dashboardRefreshTimer?.cancel();
+    _webSocket?.unsubscribe([
+      WebSocketEvents.chatHistory,
+      WebSocketEvents.runtimeLog,
+    ]);
     super.dispose();
   }
 
   void _setupStreams() {
     final webSocket = context.read<WebSocketService>();
+    _webSocket = webSocket;
     webSocket.subscribe([
-      WebSocketEvents.serverStatus,
       WebSocketEvents.systemResources,
       WebSocketEvents.chatHelp,
       WebSocketEvents.chatPrivate,
+      WebSocketEvents.chatHistory,
       WebSocketEvents.runtimeLog,
     ]);
-    webSocket.sendMessage({'type': 'runtime_log_snapshot'});
-    unawaited(_refreshDashboardLogs());
-    _logRefreshTimer = Timer.periodic(
-      const Duration(seconds: 20),
-      (_) => _refreshDashboardLogs(),
+    unawaited(_refreshDashboardData());
+    _dashboardRefreshTimer = Timer.periodic(
+      _dashboardRefreshInterval,
+      (_) => unawaited(_refreshDashboardData()),
     );
 
     _serverStatusSubscription = webSocket.serverStatusStream.listen((status) {
       if (!mounted) return;
       setState(() {
         _serverStatus = status;
-        _pushActivity(
-          _ActivityEvent(
-            icon: MdiIcons.server,
-            title: 'Server status ${status.status}',
-            detail: '${status.playersOnline}/${status.maxPlayers} players',
-            accent: _green,
-            tag: 'System',
-            tagColor: _green,
-          ),
-        );
+        _pushActivity(_serverStatusActivity(status));
       });
     });
 
@@ -136,31 +133,78 @@ class _HomeScreenState extends State<HomeScreen> {
       final isPrivate = message.channel == WebSocketEvents.chatPrivate;
       if (!isHelp && !isPrivate) return;
       setState(() {
-        _pushActivity(
-          _ActivityEvent(
-            icon: isHelp ? MdiIcons.helpBox : MdiIcons.messageLock,
-            title: isHelp ? 'Help channel message' : 'Private message',
-            detail: '${message.player}: ${message.message}',
-            accent: isHelp ? _orange : _purple,
-            tag: isHelp ? 'Chat' : 'Private',
-            tagColor: isHelp ? _orange : _purple,
-          ),
-        );
+        _pushActivity(_chatActivity(message, isHelp: isHelp));
       });
     });
 
     _runtimeSubscription = webSocket.runtimeLogStream.listen((event) {
       if (!mounted) return;
+      if (!event.snapshot) return;
       setState(() {
-        if (event.snapshot) {
-          _runtimeLines.clear();
-        }
+        _runtimeLines.clear();
         _runtimeLines.addAll(event.lines);
         if (_runtimeLines.length > 9) {
           _runtimeLines.removeRange(0, _runtimeLines.length - 9);
         }
       });
     });
+  }
+
+  Future<void> _refreshDashboardData() async {
+    if (_dashboardRefreshInProgress) {
+      return;
+    }
+
+    _dashboardRefreshInProgress = true;
+    try {
+      _requestRuntimeSnapshot();
+      _requestRecentActivitySnapshot();
+      await Future.wait([
+        _refreshServerStatus(),
+        _refreshDashboardLogs(),
+      ]);
+    } finally {
+      _dashboardRefreshInProgress = false;
+    }
+  }
+
+  void _requestRuntimeSnapshot() {
+    final webSocket = _webSocket;
+    if (webSocket != null && webSocket.connectionStatus) {
+      webSocket.sendMessage({'type': 'runtime_log_snapshot'});
+    }
+  }
+
+  void _requestRecentActivitySnapshot() {
+    final webSocket = _webSocket;
+    if (webSocket == null || !webSocket.connectionStatus) {
+      return;
+    }
+
+    webSocket.sendMessage({
+      'type': 'chat_history',
+      'channels': const [
+        WebSocketEvents.chatHelp,
+        WebSocketEvents.chatPrivate,
+      ],
+    });
+  }
+
+  Future<void> _refreshServerStatus() async {
+    try {
+      final dados = _decodeDadosResponse(await ApiService.get('server/status'));
+      final status = events.ServerStatus.fromJson(dados);
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _serverStatus = status;
+        _pushActivity(_serverStatusActivity(status));
+      });
+    } catch (_) {
+      // The WebSocket stream remains the live fallback when REST is not reachable.
+    }
   }
 
   Future<void> _refreshDashboardLogs() async {
@@ -265,48 +309,50 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _seedPreviewData() {
-    _activity.addAll([
-      _ActivityEvent(
-        icon: MdiIcons.accountCheck,
-        title: 'Waldir logged in',
-        detail: '20:24:37',
-        accent: _green,
-        tag: 'Player',
-        tagColor: _green,
-      ),
-      _ActivityEvent(
-        icon: MdiIcons.helpBox,
-        title: 'Help channel message',
-        detail: '20:24:31',
-        accent: _orange,
-        tag: 'Chat',
-        tagColor: _orange,
-      ),
-      _ActivityEvent(
-        icon: MdiIcons.contentSaveCheck,
-        title: 'Global save completed',
-        detail: '20:24:29',
-        accent: _cyan,
-        tag: 'System',
-        tagColor: _cyan,
-      ),
-      _ActivityEvent(
-        icon: MdiIcons.alert,
-        title: 'High memory usage',
-        detail: '20:24:28',
-        accent: _red,
-        tag: 'Warning',
-        tagColor: _red,
-      ),
-    ]);
-  }
-
   void _pushActivity(_ActivityEvent event) {
+    final key = event.key;
+    if (key != null) {
+      final existingIndex = _activity.indexWhere((item) => item.key == key);
+      if (existingIndex != -1) {
+        _activity.removeAt(existingIndex);
+      }
+    }
+
     _activity.insert(0, event);
     if (_activity.length > 8) {
       _activity.removeRange(8, _activity.length);
     }
+  }
+
+  _ActivityEvent _serverStatusActivity(events.ServerStatus status) {
+    final online = status.status.toLowerCase() == 'online';
+    return _ActivityEvent(
+      key: 'server-status',
+      icon: MdiIcons.server,
+      title: 'Server status ${status.status}',
+      detail: '${status.playersOnline}/${status.maxPlayers} players',
+      accent: online ? _green : _red,
+      tag: 'System',
+      tagColor: online ? _green : _red,
+    );
+  }
+
+  _ActivityEvent _chatActivity(
+    events.ChatMessage message, {
+    required bool isHelp,
+  }) {
+    final timestamp = message.timestamp.millisecondsSinceEpoch;
+    return _ActivityEvent(
+      key:
+          'chat:${message.channel}:${message.player}:$timestamp:${message.message}',
+      icon: isHelp ? MdiIcons.helpBox : MdiIcons.messageLock,
+      title: isHelp ? 'Help channel message' : 'Private message',
+      detail:
+          '${_formatActivityTime(message.timestamp)} ${message.player}: ${message.message}',
+      accent: isHelp ? _orange : _purple,
+      tag: isHelp ? 'Chat' : 'Private',
+      tagColor: isHelp ? _orange : _purple,
+    );
   }
 
   @override
@@ -1687,15 +1733,26 @@ class _RecentActivityPanel extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Expanded(
-              child: ListView.separated(
-                padding: EdgeInsets.zero,
-                itemCount: activity.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (context, index) {
-                  final item = activity[index];
-                  return _ActivityRow(item: item);
-                },
-              ),
+              child: activity.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'Waiting for recent activity...',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Color(0xFFBDA7CE),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: EdgeInsets.zero,
+                      itemCount: activity.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final item = activity[index];
+                        return _ActivityRow(item: item);
+                      },
+                    ),
             ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
@@ -2591,6 +2648,7 @@ class _HomeItem {
 }
 
 class _ActivityEvent {
+  final String? key;
   final IconData icon;
   final String title;
   final String detail;
@@ -2599,6 +2657,7 @@ class _ActivityEvent {
   final Color tagColor;
 
   const _ActivityEvent({
+    this.key,
     required this.icon,
     required this.title,
     required this.detail,
@@ -2698,6 +2757,14 @@ String _dateText(DateTime value) {
   final day = value.day.toString().padLeft(2, '0');
   final month = value.month.toString().padLeft(2, '0');
   return '$day/$month/${value.year}';
+}
+
+String _formatActivityTime(DateTime value) {
+  final local = value.toLocal();
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  final second = local.second.toString().padLeft(2, '0');
+  return '$hour:$minute:$second';
 }
 
 String _formatUptime(int seconds) {

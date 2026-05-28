@@ -131,6 +131,9 @@ launcher icons regenerated from the same square Penultima logo when changing the
 app icon. The authenticated home screen is a command-center shell: a desktop
 left operation rail, top server-time/status cards, a hero command banner,
 command tiles, runtime-log preview, log-file entry panel, and recent activity.
+The command-center dashboard refreshes those data panels in-place: every 10
+seconds it requests a runtime-log snapshot, server status, and Help/Private chat
+history for recent activity. Do not implement this as a browser/page reload.
 The phone dashboard intentionally has a separate mobile-only layout, not just a
 scaled desktop rail. When changing the dashboard Dart code, bump the shared
 build id in `web/index.html`, `web/cache_reset.js`,
@@ -149,6 +152,12 @@ local-chat selections are queued as World Chat (`chat_global`). Slash or bang
 commands typed in any monitor chat mode are queued as `god_command` on the World
 Chat channel, matching how the message appears when typed by the GOD character
 in game.
+The Chat screen itself must render messages like the in-game console, not like
+app bubbles: `HH:mm:ss Player [level]: message`, with GOD/channel text in the
+same red/orange/yellow family used by the client. Do not disable the input just
+because the WebSocket stream is disconnected; REST chat submission still queues
+against the monitor bridge so the character does not need to be online for
+normal channel/private messages.
 God command execution uses the same queue with action `god_command`; keep
 `BEATS_MONITOR_ALLOW_GOD_COMMANDS=false` unless the server build includes
 `Game.playerSay` in Lua and the command must be enabled for the configured GOD
