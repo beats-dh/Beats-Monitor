@@ -70,9 +70,12 @@ the current production env). The client registers
 installed phone PWAs, falling back to page notifications if worker registration
 is not available. `cache_reset.js` clears old Flutter PWA caches once per static
 build so installed phones can pick up the latest `/beats-monitor/` files without
-a service restart. This does not need a game server restart because it consumes
-already-emitted monitor chat events. True closed-app push delivery would require
-a separate Push API subscription and backend push sender.
+a service restart. `web/flutter_bootstrap.js` also appends the same build id to
+`main.dart.js`, which prevents an installed browser/PWA from reusing an older
+HTTP-cached Dart bundle after a no-restart static deploy. This does not need a
+game server restart because it consumes already-emitted monitor chat events.
+True closed-app push delivery would require a separate Push API subscription and
+backend push sender.
 
 Runtime logs are read directly and read-only from `BEATS_MONITOR_LOG_ROOT`.
 By default this is `/home/penultima/Penultima-Server/logs`, and the live view
