@@ -33,6 +33,19 @@ source files under `web\`. `index.html`, `cache_reset.js`, and
 `cache_reset.js` can leave installed phone PWAs on an older Dart bundle even when
 `main.dart.js` has already been uploaded.
 
+The build command with `--pwa-strategy=none` can overwrite
+`build\web\flutter_service_worker.js` with a zero-byte file. For mobile/PWA cache
+breaks, copy the checked-in self-cleaning worker back into the generated bundle
+before publishing:
+
+```powershell
+Copy-Item D:\Server\Beats-Monitor\web\flutter_service_worker.js D:\Server\Beats-Monitor\build\web\flutter_service_worker.js -Force
+```
+
+Then include `flutter_service_worker.js` in the static upload. The expected
+worker contains `cleanupAndReleaseClients()` and the same build id as the cache
+reset/bootstrap files.
+
 ## Backend Files
 
 Copy these files to the game host:

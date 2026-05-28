@@ -1,43 +1,64 @@
 (function () {
-  const buildId = "2026-05-28-command-center-3";
+  const buildId = "2026-05-28-command-center-4";
   const storageKey = "penultima-monitor-static-build";
 
   async function resetOldFlutterCache() {
+    let changed = false;
+
     if (!("serviceWorker" in navigator)) {
+      if (window.localStorage.getItem(storageKey) !== buildId) {
+        window.localStorage.setItem(storageKey, buildId);
+        changed = true;
+      }
+      redirectIfNeeded(changed);
       return;
     }
 
-    if (window.localStorage.getItem(storageKey) === buildId) {
-      return;
+    if (window.localStorage.getItem(storageKey) !== buildId) {
+      window.localStorage.setItem(storageKey, buildId);
+      changed = true;
     }
-    window.localStorage.setItem(storageKey, buildId);
 
     const registrations = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(
-      registrations
-        .filter((registration) => {
-          const activeUrl = registration.active && registration.active.scriptURL;
-          const installingUrl =
-            registration.installing && registration.installing.scriptURL;
-          const waitingUrl = registration.waiting && registration.waiting.scriptURL;
-          return [activeUrl, installingUrl, waitingUrl].some((url) =>
-            String(url || "").includes("flutter_service_worker.js")
-          );
-        })
-        .map((registration) => registration.unregister())
+    const flutterRegistrations = registrations.filter((registration) =>
+      serviceWorkerUrls(registration).some((url) =>
+        url.includes("flutter_service_worker.js")
+      )
     );
 
-    if ("caches" in window) {
-      const cacheNames = await caches.keys();
+    if (flutterRegistrations.length > 0) {
+      changed = true;
       await Promise.all(
-        cacheNames
-          .filter((name) => name.startsWith("flutter-"))
-          .map((name) => caches.delete(name))
+        flutterRegistrations.map((registration) => registration.unregister())
       );
     }
 
+    if ("caches" in window) {
+      const cacheNames = await caches.keys();
+      const staleCacheNames = cacheNames.filter((name) =>
+        name.startsWith("flutter-") ||
+        name.toLowerCase().includes("beats-monitor") ||
+        name.toLowerCase().includes("penultima-monitor")
+      );
+
+      if (staleCacheNames.length > 0) {
+        changed = true;
+        await Promise.all(staleCacheNames.map((name) => caches.delete(name)));
+      }
+    }
+
+    redirectIfNeeded(changed);
+  }
+
+  function serviceWorkerUrls(registration) {
+    return [registration.active, registration.installing, registration.waiting]
+      .map((worker) => (worker && worker.scriptURL ? worker.scriptURL : ""))
+      .filter(Boolean);
+  }
+
+  function redirectIfNeeded(changed) {
     const url = new URL(window.location.href);
-    if (url.searchParams.get("bm_build") !== buildId) {
+    if (changed || url.searchParams.get("bm_build") !== buildId) {
       url.searchParams.set("bm_build", buildId);
       window.location.replace(url.toString());
     }
