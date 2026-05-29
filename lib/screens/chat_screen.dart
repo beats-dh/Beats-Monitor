@@ -392,9 +392,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   String _outgoingChannelForSelection(String text) {
-    if (_isCommandText(text) ||
-        _selectedChannel == 'commands' ||
-        _selectedChannel == 'local') {
+    if (_selectedChannel == 'commands' || _selectedChannel == 'local') {
       return 'chat_global';
     }
     return 'chat_$_selectedChannel';
@@ -403,9 +401,7 @@ class _ChatScreenState extends State<ChatScreen>
   Future<void> _sendMessage(String text) async {
     if (text.trim().isEmpty || _isSending) return;
 
-    final commandText = _isCommandText(text);
-
-    if (_selectedChannel == 'broadcast' && !commandText) {
+    if (_selectedChannel == 'broadcast') {
       try {
         setState(() => _isSending = true);
         final response = await ApiService.post(
@@ -449,8 +445,13 @@ class _ChatScreenState extends State<ChatScreen>
     try {
       setState(() => _isSending = true);
       dynamic response;
-      final isCommand = commandText || _selectedChannel == 'commands';
-      if (_selectedChannel == 'private' && !isCommand) {
+      final isCommand = _selectedChannel == 'commands';
+      if (isCommand) {
+        response = await ApiService.post(
+          'server/god-command',
+          body: {"command": text.trim()},
+        );
+      } else if (_selectedChannel == 'private') {
         final replyTarget = _privateReplyTargetForSelection(
           _selectedPrivatePeer,
         );

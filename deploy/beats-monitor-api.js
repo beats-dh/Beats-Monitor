@@ -846,7 +846,7 @@ function chatCommandFromRequest(route, body, identity) {
 
   const channel = String(body.channel || "");
   const message = body.message || "";
-  if (isMonitorGodCommandText(message)) {
+  if (body.as_command === true && isMonitorGodCommandText(message)) {
     return {
       action: "god_command",
       channel_key: "chat_global",

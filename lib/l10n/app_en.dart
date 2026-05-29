@@ -1,7 +1,7 @@
 class AppEn {
   static const Map<String, String> values = {
     // Titles
-    'app_title': 'Penultima Monitor',
+    'app_title': 'Penultima Web',
     'monitor_title': 'Monitor',
     'server_info_title': 'Server Info',
     'server_status_title': 'Server Status',
@@ -255,15 +255,15 @@ class AppEn {
     'notifications': 'Notifications',
     'system_notifications': 'System Notifications',
     'system_notifications_desc':
-        'Notify this installed monitor when Help Chat receives a message or a private message is sent to Waldir',
+        'Notify this installed app when Help Chat receives a message or a private message is sent to Waldir',
     'notification_permission': 'Permission',
     'notification_permission_granted': 'Chat notifications are enabled.',
-    'notification_permission_denied': 'Browser notifications were not allowed.',
+    'notification_permission_denied': 'Notifications were not allowed.',
     'notification_permission_unsupported':
-        'This platform does not support browser notifications.',
+        'This platform does not support notifications.',
     'web_install_title': 'Install app',
     'web_install_desc':
-        'Install Penultima Monitor on this device for faster access and browser notifications.',
+        'Install Penultima Web on this device for faster access and notifications.',
     'web_install_button': 'Install',
     'web_install_started': 'App installation prompt opened.',
     'web_install_dismissed': 'Installation was dismissed.',

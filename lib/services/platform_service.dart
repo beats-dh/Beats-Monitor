@@ -18,4 +18,26 @@ class PlatformService {
       return false;
     }
   }
+
+  static Future<bool> showNotification({
+    required String title,
+    required String body,
+    required String tag,
+  }) async {
+    if (!Platform.isAndroid) return false;
+
+    try {
+      final result = await platform.invokeMethod('showNotification', {
+        'title': title,
+        'body': body,
+        'tag': tag,
+      });
+      return result == true;
+    } on PlatformException catch (e) {
+      if (kDebugMode) {
+        print('Error showing notification: ${e.message}');
+      }
+      return false;
+    }
+  }
 }

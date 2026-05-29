@@ -3,15 +3,15 @@ import 'dart:js_interop_unsafe';
 
 import 'package:web/web.dart' as web;
 
-@JS('penultimaMonitorCanInstall')
-external JSBoolean _penultimaMonitorCanInstall();
+@JS('penultimaWebCanInstall')
+external JSBoolean _penultimaWebCanInstall();
 
-@JS('penultimaMonitorPromptInstall')
-external JSPromise<JSBoolean> _penultimaMonitorPromptInstall();
+@JS('penultimaWebPromptInstall')
+external JSPromise<JSBoolean> _penultimaWebPromptInstall();
 
 class WebAppInstallService {
   static bool get isSupported =>
-      web.window.has('penultimaMonitorPromptInstall');
+      web.window.has('penultimaWebPromptInstall');
 
   static bool get canInstall {
     if (!isSupported) {
@@ -19,7 +19,7 @@ class WebAppInstallService {
     }
 
     try {
-      return _penultimaMonitorCanInstall().toDart;
+      return _penultimaWebCanInstall().toDart;
     } catch (_) {
       return false;
     }
@@ -31,7 +31,7 @@ class WebAppInstallService {
     }
 
     try {
-      return (await _penultimaMonitorPromptInstall().toDart).toDart;
+      return (await _penultimaWebPromptInstall().toDart).toDart;
     } catch (_) {
       return false;
     }

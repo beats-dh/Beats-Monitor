@@ -1,5 +1,5 @@
 [Unit]
-Description=Penultima Monitor API
+Description=Penultima Web API
 After=network-online.target mariadb.service mysql.service
 Wants=network-online.target
 

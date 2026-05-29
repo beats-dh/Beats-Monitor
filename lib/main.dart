@@ -9,6 +9,7 @@ import 'providers/locale_provider.dart';
 import 'services/websocket_service.dart';
 import 'services/auth_service.dart';
 import 'services/config_service.dart';
+import 'services/update_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'l10n/app_localizations.dart';
@@ -21,6 +22,7 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final configService = ConfigService();
   await configService.init();
+  await UpdateService.instance.init();
 
   final webSocketService = WebSocketService(configService);
   // Inicializa a conexão WebSocket uma única vez para todo o aplicativo
@@ -57,13 +59,13 @@ void main() async {
         ChangeNotifierProvider<ConfigService>.value(value: configService),
         ChangeNotifierProvider(create: (_) => localeProvider),
       ],
-      child: const PenultimaMonitorApp(),
+      child: const PenultimaWebApp(),
     ),
   );
 }
 
-class PenultimaMonitorApp extends StatelessWidget {
-  const PenultimaMonitorApp({super.key});
+class PenultimaWebApp extends StatelessWidget {
+  const PenultimaWebApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +73,7 @@ class PenultimaMonitorApp extends StatelessWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Penultima Monitor',
+      title: 'Penultima Web',
       locale: localeProvider.locale,
       supportedLocales: const [
         Locale('pt'),

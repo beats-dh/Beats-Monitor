@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:beats_monitor/l10n/app_localizations.dart';
 import 'package:beats_monitor/services/download_service.dart';
@@ -34,10 +35,17 @@ class _ConfigScreenState extends State<ConfigScreen> {
   void initState() {
     super.initState();
     _baseUrlController = TextEditingController();
-    UpdateService.instance.init();
+    unawaited(_initializeUpdateService());
     DownloadService.cleanOldUpdates(); // Limpa APKs antigos
-    _checkForUpdates();
     _loadNotificationSettings();
+  }
+
+  Future<void> _initializeUpdateService() async {
+    await UpdateService.instance.init();
+    if (mounted) {
+      setState(() {});
+    }
+    await _checkForUpdates();
   }
 
   Future<void> _loadNotificationSettings() async {
@@ -516,7 +524,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
               const Divider(),
               ListTile(
                 title: Text(l10n.translate('developed_by')),
-                subtitle: const Text('Daniel Henrique [ Penultima ]'),
+                subtitle: const Text('Waldir'),
                 trailing: IconButton(
                   icon: const Icon(Icons.link),
                   onPressed: () {

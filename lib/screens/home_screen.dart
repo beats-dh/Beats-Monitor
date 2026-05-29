@@ -39,6 +39,8 @@ const _border = Color(0x664F1B79);
 const _serverClientVersion = '15.23';
 const _serverProtocolVersion = '1523';
 const _dashboardRefreshInterval = Duration(seconds: 10);
+const _dashboardRuntimeLineLimit = 80;
+const _recentActivityLimit = 30;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -54,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Timer? _clockTimer;
   Timer? _dashboardRefreshTimer;
   DateTime _now = DateTime.now();
+  DateTime? _lastSaveAt;
   bool _streamsReady = false;
   bool _dashboardRefreshInProgress = false;
   bool _logsLoading = false;
@@ -119,7 +122,6 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       setState(() {
         _serverStatus = status;
-        _pushActivity(_serverStatusActivity(status));
       });
     });
 
@@ -142,11 +144,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       if (!event.snapshot) return;
       setState(() {
-        _runtimeLines.clear();
-        _runtimeLines.addAll(event.lines);
-        if (_runtimeLines.length > 9) {
-          _runtimeLines.removeRange(0, _runtimeLines.length - 9);
-        }
+        _replaceRuntimeLines(event.lines);
       });
     });
   }
@@ -201,7 +199,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
       setState(() {
         _serverStatus = status;
-        _pushActivity(_serverStatusActivity(status));
       });
     } catch (_) {
       // The WebSocket stream remains the live fallback when REST is not reachable.
@@ -234,10 +231,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _logFiles
           ..clear()
           ..addAll(list.files);
-        _runtimeLines
-          ..clear()
-          ..addAll(
-              lines.length > 12 ? lines.sublist(lines.length - 12) : lines);
+        _replaceRuntimeLines(lines);
       });
     } catch (_) {
       // The dashboard still renders from the active WebSocket data when the
@@ -320,22 +314,19 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     _activity.insert(0, event);
-    if (_activity.length > 8) {
-      _activity.removeRange(8, _activity.length);
+    if (_activity.length > _recentActivityLimit) {
+      _activity.removeRange(_recentActivityLimit, _activity.length);
     }
   }
 
-  _ActivityEvent _serverStatusActivity(events.ServerStatus status) {
-    final online = status.status.toLowerCase() == 'online';
-    return _ActivityEvent(
-      key: 'server-status',
-      icon: MdiIcons.server,
-      title: 'Server status ${status.status}',
-      detail: '${status.playersOnline}/${status.maxPlayers} players',
-      accent: online ? _green : _red,
-      tag: 'System',
-      tagColor: online ? _green : _red,
-    );
+  void _replaceRuntimeLines(List<String> lines) {
+    final tail = lines.length > _dashboardRuntimeLineLimit
+        ? lines.sublist(lines.length - _dashboardRuntimeLineLimit)
+        : lines;
+    _runtimeLines
+      ..clear()
+      ..addAll(tail);
+    _lastSaveAt = _detectLastSaveAt(tail) ?? _lastSaveAt;
   }
 
   _ActivityEvent _chatActivity(
@@ -354,6 +345,56 @@ class _HomeScreenState extends State<HomeScreen> {
       tag: isHelp ? 'Chat' : 'Private',
       tagColor: isHelp ? _orange : _purple,
     );
+  }
+
+  DateTime? _detectLastSaveAt(List<String> lines) {
+    for (final line in lines.reversed) {
+      final lower = line.toLowerCase();
+      if (!lower.contains('server save') &&
+          !lower.contains('server saved') &&
+          !lower.contains('saving server')) {
+        continue;
+      }
+
+      return _parseLogTimestamp(line) ?? DateTime.now();
+    }
+    return null;
+  }
+
+  DateTime? _parseLogTimestamp(String line) {
+    final match = RegExp(
+      r'^\[(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})',
+    ).firstMatch(line);
+    if (match == null) {
+      return null;
+    }
+
+    final year = int.tryParse(match.group(1) ?? '');
+    var month = int.tryParse(match.group(2) ?? '');
+    var day = int.tryParse(match.group(3) ?? '');
+    final hour = int.tryParse(match.group(4) ?? '');
+    final minute = int.tryParse(match.group(5) ?? '');
+    final second = int.tryParse(match.group(6) ?? '');
+    if (year == null ||
+        month == null ||
+        day == null ||
+        hour == null ||
+        minute == null ||
+        second == null) {
+      return null;
+    }
+
+    if (month > 12 && day <= 12) {
+      final originalMonth = month;
+      month = day;
+      day = originalMonth;
+    }
+
+    try {
+      return DateTime(year, month, day, hour, minute, second);
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
@@ -388,6 +429,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         connected: webSocket.connectionStatus,
                         status: _serverStatus,
                         systemData: _systemData,
+                        lastSaveAt: _lastSaveAt,
                         runtimeLines: _runtimeLines,
                         logFiles: _logFiles,
                         activity: _activity,
@@ -409,6 +451,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   connected: webSocket.connectionStatus,
                   status: _serverStatus,
                   systemData: _systemData,
+                  lastSaveAt: _lastSaveAt,
                   runtimeLines: _runtimeLines,
                   logFiles: _logFiles,
                   activity: _activity,
@@ -425,6 +468,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 connected: webSocket.connectionStatus,
                 status: _serverStatus,
                 systemData: _systemData,
+                lastSaveAt: _lastSaveAt,
                 runtimeLines: _runtimeLines,
                 logFiles: _logFiles,
                 activity: _activity,
@@ -601,7 +645,7 @@ class _CommandSidebar extends StatelessWidget {
                     ),
                     const SizedBox(height: 14),
                     Text(
-                      'Penultima Monitor',
+                      'Penultima Web',
                       textAlign: TextAlign.center,
                       style:
                           Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -612,7 +656,7 @@ class _CommandSidebar extends StatelessWidget {
                     ),
                     const SizedBox(height: 7),
                     Text(
-                      'Server Operations Center',
+                      'Web Administration',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: const Color(0xFFBFA6D8),
@@ -656,6 +700,7 @@ class _CommandCenterDashboard extends StatelessWidget {
   final bool connected;
   final events.ServerStatus? status;
   final SystemData? systemData;
+  final DateTime? lastSaveAt;
   final List<String> runtimeLines;
   final List<_DashboardLogFile> logFiles;
   final List<_ActivityEvent> activity;
@@ -672,6 +717,7 @@ class _CommandCenterDashboard extends StatelessWidget {
     required this.connected,
     required this.status,
     required this.systemData,
+    required this.lastSaveAt,
     required this.runtimeLines,
     required this.logFiles,
     required this.activity,
@@ -724,6 +770,7 @@ class _CommandCenterDashboard extends StatelessWidget {
                 child: _HeroAndStatusRow(
                   status: status,
                   systemData: systemData,
+                  lastSaveAt: lastSaveAt,
                   connected: connected,
                   stack: width < 930,
                 ),
@@ -789,6 +836,7 @@ class _PhoneCommandCenter extends StatelessWidget {
   final bool connected;
   final events.ServerStatus? status;
   final SystemData? systemData;
+  final DateTime? lastSaveAt;
   final List<String> runtimeLines;
   final List<_DashboardLogFile> logFiles;
   final List<_ActivityEvent> activity;
@@ -804,6 +852,7 @@ class _PhoneCommandCenter extends StatelessWidget {
     required this.connected,
     required this.status,
     required this.systemData,
+    required this.lastSaveAt,
     required this.runtimeLines,
     required this.logFiles,
     required this.activity,
@@ -840,6 +889,7 @@ class _PhoneCommandCenter extends StatelessWidget {
             child: _PhoneStatusStrip(
               status: status,
               systemData: systemData,
+              lastSaveAt: lastSaveAt,
               connected: connected,
             ),
           ),
@@ -924,7 +974,7 @@ class _CommandTopBar extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Command Center',
+          'Penultima Web',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -935,7 +985,7 @@ class _CommandTopBar extends StatelessWidget {
         ),
         const SizedBox(height: 5),
         Text(
-          'Real-time overview of your server',
+          'Web Administration',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -954,7 +1004,14 @@ class _CommandTopBar extends StatelessWidget {
           tooltip: 'Search',
           onPressed: () {},
         ),
-        _NotificationButton(),
+        _NotificationButton(
+          onPressed: () {
+            Navigator.push(
+              context,
+              PageTransition<void>(child: const ConfigScreen()),
+            );
+          },
+        ),
         _ToolbarIconButton(
           icon: Icons.language_rounded,
           tooltip: 'Language',
@@ -976,8 +1033,6 @@ class _CommandTopBar extends StatelessWidget {
           children: [
             Row(
               children: [
-                _MenuButton(),
-                const SizedBox(width: 12),
                 Expanded(child: title),
                 actions,
               ],
@@ -1020,8 +1075,6 @@ class _CommandTopBar extends StatelessWidget {
 
     return Row(
       children: [
-        const _MenuButton(),
-        const SizedBox(width: 16),
         Expanded(child: title),
         _MetricCard(
           icon: MdiIcons.clockOutline,
@@ -1072,14 +1125,12 @@ class _PhoneHeader extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       child: Row(
         children: [
-          const _MenuButton(),
-          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Command Center',
+                  'Penultima Web',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -1100,6 +1151,14 @@ class _PhoneHeader extends StatelessWidget {
               ],
             ),
           ),
+          _NotificationButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                PageTransition<void>(child: const ConfigScreen()),
+              );
+            },
+          ),
           _ToolbarIconButton(
             icon: Icons.language_rounded,
             tooltip: 'Language',
@@ -1119,12 +1178,14 @@ class _PhoneHeader extends StatelessWidget {
 class _HeroAndStatusRow extends StatelessWidget {
   final events.ServerStatus? status;
   final SystemData? systemData;
+  final DateTime? lastSaveAt;
   final bool connected;
   final bool stack;
 
   const _HeroAndStatusRow({
     required this.status,
     required this.systemData,
+    required this.lastSaveAt,
     required this.connected,
     required this.stack,
   });
@@ -1139,6 +1200,7 @@ class _HeroAndStatusRow extends StatelessWidget {
           _ServerStatusPanel(
             status: status,
             systemData: systemData,
+            lastSaveAt: lastSaveAt,
             connected: connected,
           ),
         ],
@@ -1158,6 +1220,7 @@ class _HeroAndStatusRow extends StatelessWidget {
             child: _ServerStatusPanel(
               status: status,
               systemData: systemData,
+              lastSaveAt: lastSaveAt,
               connected: connected,
             ),
           ),
@@ -1215,7 +1278,7 @@ class _CommandHeroBanner extends StatelessWidget {
                       ),
                       SizedBox(height: phone ? 8 : 14),
                       Text(
-                        'POWER  -  CONTROL  -  GLORY',
+                        'Web Administration',
                         textAlign: TextAlign.center,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1227,17 +1290,6 @@ class _CommandHeroBanner extends StatelessWidget {
                             Shadow(color: _purple, blurRadius: 18),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'You are in control. We handle the rest.',
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: const Color(0xFFD7C7E2),
-                              fontWeight: FontWeight.w700,
-                            ),
                       ),
                     ],
                   ),
@@ -1254,11 +1306,13 @@ class _CommandHeroBanner extends StatelessWidget {
 class _ServerStatusPanel extends StatelessWidget {
   final events.ServerStatus? status;
   final SystemData? systemData;
+  final DateTime? lastSaveAt;
   final bool connected;
 
   const _ServerStatusPanel({
     required this.status,
     required this.systemData,
+    required this.lastSaveAt,
     required this.connected,
   });
 
@@ -1340,7 +1394,7 @@ class _ServerStatusPanel extends StatelessWidget {
                 ),
               ),
               Text(
-                '2 min ago',
+                _formatRelativeTime(lastSaveAt),
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Colors.white70,
                       fontWeight: FontWeight.w700,
@@ -1359,11 +1413,13 @@ class _ServerStatusPanel extends StatelessWidget {
 class _PhoneStatusStrip extends StatelessWidget {
   final events.ServerStatus? status;
   final SystemData? systemData;
+  final DateTime? lastSaveAt;
   final bool connected;
 
   const _PhoneStatusStrip({
     required this.status,
     required this.systemData,
+    required this.lastSaveAt,
     required this.connected,
   });
 
@@ -1372,44 +1428,47 @@ class _PhoneStatusStrip extends StatelessWidget {
     final players = status?.playersOnline ?? 142;
     final cpu = systemData?.systemInfo.cpu.usagePercent.round() ?? 18;
     final memory = systemData?.systemInfo.memory.usagePercent.round() ?? 37;
-    return Row(
-      children: [
-        Expanded(
-          child: _PhoneStatChip(
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        children: [
+          _PhoneStatChip(
             icon: MdiIcons.accountGroup,
             label: 'Players',
             value: '$players',
             accent: _purple,
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _PhoneStatChip(
+          const SizedBox(width: 8),
+          _PhoneStatChip(
             icon: MdiIcons.cpu64Bit,
             label: 'CPU',
             value: '$cpu%',
             accent: _green,
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _PhoneStatChip(
+          const SizedBox(width: 8),
+          _PhoneStatChip(
             icon: MdiIcons.memory,
             label: 'Memory',
             value: '$memory%',
             accent: _orange,
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _PhoneStatChip(
+          const SizedBox(width: 8),
+          _PhoneStatChip(
             icon: MdiIcons.cubeOutline,
             label: 'Version',
             value: _serverClientVersion,
             accent: const Color(0xFFB774FF),
           ),
-        ),
-      ],
+          const SizedBox(width: 8),
+          _PhoneStatChip(
+            icon: MdiIcons.contentSaveCheck,
+            label: 'Last Save',
+            value: _formatRelativeTime(lastSaveAt),
+            accent: _purple,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1451,7 +1510,7 @@ class _OperationsGrid extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           SizedBox(
-            height: 330,
+            height: 430,
             child: _RecentActivityPanel(activity: activity),
           ),
         ],
@@ -1791,10 +1850,44 @@ class _RecentActivityPanel extends StatelessWidget {
     this.phone = false,
   });
 
+  void _showAllActivity(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: const Color(0xFF08040D),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _PanelHeader(
+                icon: MdiIcons.pulse,
+                title: 'Recent Activity',
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: activity.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) =>
+                      _ActivityRow(item: activity[index]),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: phone ? 310 : null,
+      height: phone ? 430 : null,
       child: _ChromePanel(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
         child: Column(
@@ -1829,7 +1922,8 @@ class _RecentActivityPanel extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
-              onPressed: () {},
+              onPressed:
+                  activity.isEmpty ? null : () => _showAllActivity(context),
               icon: const Icon(Icons.open_in_new_rounded, size: 17),
               label: const Text('View All Activity'),
               style: OutlinedButton.styleFrom(
@@ -2224,34 +2318,37 @@ class _PhoneStatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _ChromePanel(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      borderColor: accent.withAlpha(100),
-      child: Column(
-        children: [
-          Icon(icon, color: accent, size: 22),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  height: 1,
-                ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: const Color(0xFFC8B5D8),
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-        ],
+    return SizedBox(
+      width: 116,
+      child: _ChromePanel(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        borderColor: accent.withAlpha(100),
+        child: Column(
+          children: [
+            Icon(icon, color: accent, size: 22),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
+                  ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFFC8B5D8),
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2484,28 +2581,6 @@ class _GlowIcon extends StatelessWidget {
   }
 }
 
-class _MenuButton extends StatelessWidget {
-  const _MenuButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return _ChromePanel(
-      padding: EdgeInsets.zero,
-      borderColor: const Color(0x885B2784),
-      child: SizedBox(
-        width: 58,
-        height: 58,
-        child: IconButton(
-          onPressed: () {},
-          icon: const Icon(Icons.menu_rounded),
-          color: Colors.white,
-          tooltip: 'Menu',
-        ),
-      ),
-    );
-  }
-}
-
 class _ToolbarIconButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
@@ -2542,6 +2617,12 @@ class _ToolbarIconButton extends StatelessWidget {
 }
 
 class _NotificationButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _NotificationButton({
+    required this.onPressed,
+  });
+
   @override
   Widget build(BuildContext context) {
     return Stack(
@@ -2550,7 +2631,7 @@ class _NotificationButton extends StatelessWidget {
         _ToolbarIconButton(
           icon: Icons.notifications_none_rounded,
           tooltip: 'Notifications',
-          onPressed: () {},
+          onPressed: onPressed,
         ),
         Positioned(
           top: 0,
@@ -2859,6 +2940,24 @@ String _formatUptime(int seconds) {
   if (days > 0) return '${days}d ${hours}h ${minutes}m';
   if (hours > 0) return '${hours}h ${minutes}m';
   return '${minutes}m';
+}
+
+String _formatRelativeTime(DateTime? value) {
+  if (value == null) {
+    return 'Waiting';
+  }
+
+  final elapsed = DateTime.now().difference(value);
+  if (elapsed.inSeconds < 60) {
+    return '${elapsed.inSeconds}s ago';
+  }
+  if (elapsed.inMinutes < 60) {
+    return '${elapsed.inMinutes}m ago';
+  }
+  if (elapsed.inHours < 24) {
+    return '${elapsed.inHours}h ago';
+  }
+  return '${elapsed.inDays}d ago';
 }
 
 String _formatBytes(int bytes) {

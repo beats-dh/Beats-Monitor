@@ -59,7 +59,7 @@ void main() {
           ChangeNotifierProvider<WebSocketService>.value(
               value: webSocketService),
         ],
-        child: const PenultimaMonitorApp(),
+        child: const PenultimaWebApp(),
       ),
     );
 
@@ -109,7 +109,7 @@ void main() {
 
     await tester.pump();
 
-    expect(find.text('Command Center'), findsOneWidget);
+    expect(find.text('Penultima Web'), findsOneWidget);
     expect(find.text('Monitor'), findsOneWidget);
     expect(find.byKey(const ValueKey('home_tile_Monitor')), findsOneWidget);
     expect(find.text('15.23'), findsOneWidget);

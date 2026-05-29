@@ -1,7 +1,7 @@
 class AppPt {
   static const Map<String, String> values = {
     // Títulos
-    'app_title': 'Penultima Monitor',
+    'app_title': 'Penultima Web',
     'monitor_title': 'Monitor',
     'server_info_title': 'Informações do Servidor',
     'server_status_title': 'Status do Servidor',
@@ -266,16 +266,16 @@ class AppPt {
     'notifications': 'Notificações',
     'system_notifications': 'Notificações do Sistema',
     'system_notifications_desc':
-        'Avisar este monitor instalado quando o Help Chat receber mensagem ou uma private for enviada para Waldir',
+        'Avisar este app instalado quando o Help Chat receber mensagem ou uma private for enviada para Waldir',
     'notification_permission': 'Permissão',
     'notification_permission_granted': 'Notificações de chat ativadas.',
     'notification_permission_denied':
-        'As notificações do navegador não foram permitidas.',
+        'As notificações não foram permitidas.',
     'notification_permission_unsupported':
-        'Esta plataforma não suporta notificações do navegador.',
+        'Esta plataforma não suporta notificações.',
     'web_install_title': 'Instalar app',
     'web_install_desc':
-        'Instale o Penultima Monitor neste dispositivo para acesso rápido e notificações do navegador.',
+        'Instale o Penultima Web neste dispositivo para acesso rápido e notificações.',
     'web_install_button': 'Instalar',
     'web_install_started': 'Aviso de instalação aberto.',
     'web_install_dismissed': 'Instalação cancelada.',

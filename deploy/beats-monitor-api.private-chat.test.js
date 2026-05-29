@@ -87,15 +87,15 @@ test("god command is queued exactly as typed by the authenticated monitor player
   assert.equal(command.requested_by_account_id, 8);
 });
 
-test("slash commands typed in normal chat use the god command queue", () => {
+test("slash commands typed in normal chat are sent exactly to that channel", () => {
   const command = chatCommandFromRequest(
     "server/chat-message",
     { channel: "chat_help", message: "/t Tankso,32365,32242,7" },
     waldir
   );
 
-  assert.equal(command.action, "god_command");
-  assert.equal(command.channel_key, "chat_global");
+  assert.equal(command.action, "channel");
+  assert.equal(command.channel_key, "chat_help");
   assert.equal(command.message, "/t Tankso,32365,32242,7");
 });
 

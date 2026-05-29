@@ -11,11 +11,11 @@
     deferredInstallPrompt = null;
   });
 
-  window.penultimaMonitorCanInstall = function () {
+  window.penultimaWebCanInstall = function () {
     return Boolean(deferredInstallPrompt);
   };
 
-  window.penultimaMonitorPromptInstall = async function () {
+  window.penultimaWebPromptInstall = async function () {
     if (!deferredInstallPrompt) {
       return false;
     }

@@ -1,9 +1,9 @@
-# Penultima Monitor Production Deployment
+# Penultima Web Production Deployment
 
 Production uses two deployable pieces:
 
-1. Static Flutter web build served at `/beats-monitor/`.
-2. Hardened Node API adapter served behind HTTPS at `/beats-monitor-api/`.
+1. Static Flutter web build currently served at `/beats-monitor/`.
+2. Hardened Node API adapter currently served behind HTTPS at `/beats-monitor-api/`.
 
 The Flutter build defaults to same-origin routing:
 
@@ -82,24 +82,26 @@ a GOD/staff character.
 
 Chat history/live chat is read from `beats_monitor_chat_messages`. The server
 fills that table from the chat channel scripts and the game speech path after the
-game is running code that contains the Penultima Monitor chat logger. The monitor
+game is running code that contains the Penultima Web chat logger. The monitor
 reads local chat, World/English chat, trade, help, and private messages.
 
-Installed monitor notifications are client/PWA-side. After the user grants
-browser notification permission, the web client watches the existing WebSocket
-chat stream and shows a notification for every Help Chat message and every
-private message addressed to `BEATS_MONITOR_REQUIRED_PLAYER_NAME` (`Waldir` in
-the current production env). The client registers
-`monitor_notification_worker.js` and uses its `showNotification` API for
-installed phone PWAs, falling back to page notifications if worker registration
-is not available. `cache_reset.js` clears old Flutter PWA caches once per static
-build so installed phones can pick up the latest `/beats-monitor/` files without
-a service restart. `web/flutter_bootstrap.js` also appends the same build id to
-`main.dart.js`, which prevents an installed browser/PWA from reusing an older
-HTTP-cached Dart bundle after a no-restart static deploy. This does not need a
-game server restart because it consumes already-emitted monitor chat events.
-True closed-app push delivery would require a separate Push API subscription and
-backend push sender.
+Installed Penultima Web notifications are client-side. After the user grants
+notification permission, the web/PWA client watches the existing WebSocket chat
+stream and shows a notification for every Help Chat message and every private
+message addressed to `BEATS_MONITOR_REQUIRED_PLAYER_NAME` (`Waldir` in the
+current production env). Web/PWA uses `monitor_notification_worker.js` when
+available and falls back to page notifications. Android APK builds use the
+existing Flutter platform channel to call native Android notifications on the
+`penultima_web_chat_alerts` channel. These paths do not need a game server
+restart because they consume already-emitted monitor chat events while the app
+process is running. True force-closed-app push delivery would require a separate
+Push API/FCM token flow and backend push sender.
+
+`cache_reset.js` clears old Flutter PWA caches once per static build so installed
+phones can pick up the latest `/beats-monitor/` files without a service restart.
+`web/flutter_bootstrap.js` also appends the same build id to `main.dart.js`,
+which prevents an installed browser/PWA from reusing an older HTTP-cached Dart
+bundle after a no-restart static deploy.
 
 Runtime logs are read directly and read-only from `BEATS_MONITOR_LOG_ROOT`.
 By default this is `/home/penultima/Penultima-Server/logs`, and the live view
@@ -155,10 +157,13 @@ After that first activation, keep `BEATS_MONITOR_REQUIRE_FRESH_GAME_BRIDGE=false
 so normal no-restart builds do not falsely disable queuing just because the
 binary on disk is newer than the running game process.
 Because the monitor is not an in-game creature and has no map position, outgoing
-local-chat selections are queued as World Chat (`chat_global`). Slash or bang
-commands typed in any monitor chat mode are queued as `god_command` on the World
-Chat channel, matching how the message appears when typed by the GOD character
-in game.
+local-chat selections are queued as World Chat (`chat_global`). Normal World
+Chat, Advertising, and Help messages must preserve the exact text the user typed,
+including `!` or `/` prefixes such as `use !task`, and the game-side command
+consumer sends them with `TALKTYPE_CHANNEL_O` so they appear in the orange GOD
+channel style. Only the explicit Commands tab / `server/god-command` route queues
+`god_command`; do not auto-promote slash or bang text typed in normal chat
+channels into commands.
 The Chat screen itself must render messages like the in-game console, not like
 app bubbles: `HH:mm:ss Player [level]: message`, with GOD/channel text in the
 same red/orange/yellow family used by the client. Do not disable the input just
@@ -168,7 +173,9 @@ normal channel/private messages.
 God command execution uses the same queue with action `god_command`; keep
 `BEATS_MONITOR_ALLOW_GOD_COMMANDS=false` unless the server build includes
 `Game.playerSay` in Lua and the command must be enabled for the configured GOD
-character.
+character. Offline command execution depends on the C++/Lua game process loading
+an offline player through `Game.getOfflinePlayer`, so it only becomes live after
+a normal approved game-server restart loads the deployed binary.
 
 ## Activation
 

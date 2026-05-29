@@ -1,6 +1,6 @@
 (function () {
-  const buildId = "2026-05-28-command-center-11";
-  const storageKey = "penultima-monitor-static-build";
+  const buildId = "2026-05-28-penultima-web-12";
+  const storageKey = "penultima-web-static-build";
 
   async function resetOldFlutterCache() {
     let changed = false;
@@ -38,7 +38,8 @@
       const staleCacheNames = cacheNames.filter((name) =>
         name.startsWith("flutter-") ||
         name.toLowerCase().includes("beats-monitor") ||
-        name.toLowerCase().includes("penultima-monitor")
+        name.toLowerCase().includes("penultima-monitor") ||
+        name.toLowerCase().includes("penultima-web")
       );
 
       if (staleCacheNames.length > 0) {
@@ -58,13 +59,13 @@
 
   function redirectIfNeeded(changed) {
     const url = new URL(window.location.href);
-    if (changed || url.searchParams.get("bm_build") !== buildId) {
-      url.searchParams.set("bm_build", buildId);
+    if (changed || url.searchParams.get("pw_build") !== buildId) {
+      url.searchParams.set("pw_build", buildId);
       window.location.replace(url.toString());
     }
   }
 
   resetOldFlutterCache().catch((error) => {
-    console.warn("Penultima Monitor cache reset failed.", error);
+    console.warn("Penultima Web cache reset failed.", error);
   });
 })();

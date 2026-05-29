@@ -17,7 +17,7 @@ class LiveCaptureController extends ChangeNotifier {
 
   LiveCaptureController() {
     _viewType =
-        'beats-monitor-live-video-${DateTime.now().microsecondsSinceEpoch}';
+        'penultima-web-live-video-${DateTime.now().microsecondsSinceEpoch}';
     _videoElement = web.HTMLVideoElement()
       ..autoplay = true
       ..muted = true

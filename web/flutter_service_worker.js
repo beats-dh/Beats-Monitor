@@ -1,4 +1,4 @@
-const cleanupBuildId = "2026-05-28-command-center-11";
+const cleanupBuildId = "2026-05-28-penultima-web-12";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
@@ -20,7 +20,8 @@ async function cleanupAndReleaseClients() {
         .filter((name) =>
           name.startsWith("flutter-") ||
           name.toLowerCase().includes("beats-monitor") ||
-          name.toLowerCase().includes("penultima-monitor")
+          name.toLowerCase().includes("penultima-monitor") ||
+          name.toLowerCase().includes("penultima-web")
         )
         .map((name) => caches.delete(name))
     );
@@ -42,7 +43,7 @@ async function cleanupAndReleaseClients() {
         return Promise.resolve();
       }
 
-      url.searchParams.set("bm_sw_reset", cleanupBuildId);
+      url.searchParams.set("pw_sw_reset", cleanupBuildId);
       return client.navigate(url.href).catch(() => undefined);
     })
   );
