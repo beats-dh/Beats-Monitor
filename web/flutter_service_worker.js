@@ -1,4 +1,4 @@
-const cleanupBuildId = "2026-05-28-penultima-web-12";
+const cleanupBuildId = "2026-06-12-beats-monitor-api-base";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());

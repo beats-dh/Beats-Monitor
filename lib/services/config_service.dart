@@ -48,10 +48,29 @@ class ConfigService extends ChangeNotifier {
     return '${current.scheme}://${current.authority}';
   }
 
+  bool _isLoopbackHost(String host) {
+    final normalized = host.toLowerCase();
+    return normalized == 'localhost' ||
+        normalized == '127.0.0.1' ||
+        normalized == '::1';
+  }
+
+  bool _shouldUseLocalWebBackend(String base) {
+    if (!kIsWeb || !base.startsWith('/')) {
+      return false;
+    }
+
+    final current = Uri.base;
+    return _isLoopbackHost(current.host);
+  }
+
   String _buildHttpBaseUrl(String value) {
     final base = _cleanBaseUrl(value);
     if (base.startsWith('http://') || base.startsWith('https://')) {
       return '$base/api/v1';
+    }
+    if (_shouldUseLocalWebBackend(base)) {
+      return 'http://$_defaultNativeBaseUrl/api/v1';
     }
     if (base.startsWith('/')) {
       return '${_currentOrigin()}$base/api/v1';
@@ -66,6 +85,9 @@ class ConfigService extends ChangeNotifier {
     }
     if (base.startsWith('http://')) {
       return 'ws://${base.substring('http://'.length)}/ws';
+    }
+    if (_shouldUseLocalWebBackend(base)) {
+      return 'ws://$_defaultNativeBaseUrl/ws';
     }
     if (base.startsWith('/')) {
       final current = Uri.base;
