@@ -1,4 +1,4 @@
-const cleanupBuildId = "2026-06-12-beats-monitor-api-base";
+const cleanupBuildId = "2026-06-12-chat-bridge";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());

@@ -1,5 +1,5 @@
 (function () {
-  const buildId = "2026-06-12-beats-monitor-api-base";
+  const buildId = "2026-06-12-chat-bridge";
   const storageKey = "penultima-web-static-build";
 
   async function resetOldFlutterCache() {

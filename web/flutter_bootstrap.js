@@ -1,7 +1,7 @@
 {{flutter_js}}
 {{flutter_build_config}}
 
-const penultimaWebBuildId = '2026-06-12-beats-monitor-api-base';
+const penultimaWebBuildId = '2026-06-12-chat-bridge';
 
 for (const build of _flutter.buildConfig.builds) {
   if (build.mainJsPath === 'main.dart.js') {

@@ -156,6 +156,16 @@ command consumer has been deployed and the game process has restarted normally.
 After that first activation, keep `BEATS_MONITOR_REQUIRE_FRESH_GAME_BRIDGE=false`
 so normal no-restart builds do not falsely disable queuing just because the
 binary on disk is newer than the running game process.
+When the live Node adapter is older or still has chat sending disabled and it
+cannot be restarted, publish `web/beats_monitor_chat.php` with the static bundle.
+The Flutter REST wrapper must try the Node route first, then fall back to this
+PHP bridge only for the known `Chat sending is disabled in this production
+adapter` response on `server/chat-message`, `server/broadcast`, or
+`players/message`. The bridge validates the same monitor bearer token against
+`GET /api/v1/server/status`, decodes the already-validated token identity for
+`requested_by`, and inserts only `channel`, `broadcast`, and `private` rows into
+`beats_monitor_commands`. It must not accept `server/god-command`; GOD commands
+remain tied to the Node adapter and `BEATS_MONITOR_ALLOW_GOD_COMMANDS`.
 Because the monitor is not an in-game creature and has no map position, outgoing
 local-chat selections are queued as World Chat (`chat_global`). Normal World
 Chat, Advertising, and Help messages must preserve the exact text the user typed,
