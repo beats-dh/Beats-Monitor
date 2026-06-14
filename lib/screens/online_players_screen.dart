@@ -38,6 +38,9 @@ class _OnlinePlayersScreenState extends State<OnlinePlayersScreen> {
     super.dispose();
   }
 
+  bool _isQueuedMessageAccepted(int statusCode) =>
+      statusCode == 200 || statusCode == 202;
+
   List<dynamic> _filterPlayers(List<dynamic> players) {
     return players.where((player) {
       final name = (player['name'] ?? '').toString().toLowerCase();
@@ -465,8 +468,8 @@ class _OnlinePlayersScreenState extends State<OnlinePlayersScreen> {
                                                   if (!mounted) return;
                                                   Navigator.pop(context);
 
-                                                  if (response.statusCode ==
-                                                      200) {
+                                                  if (_isQueuedMessageAccepted(
+                                                      response.statusCode)) {
                                                     ScaffoldMessenger.of(
                                                             context)
                                                         .showSnackBar(

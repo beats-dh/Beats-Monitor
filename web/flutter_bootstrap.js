@@ -1,7 +1,7 @@
 {{flutter_js}}
 {{flutter_build_config}}
 
-const penultimaWebBuildId = '2026-06-12-chat-bridge';
+const penultimaWebBuildId = '2026-06-13-message-202';
 
 for (const build of _flutter.buildConfig.builds) {
   if (build.mainJsPath === 'main.dart.js') {

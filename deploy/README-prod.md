@@ -166,6 +166,10 @@ adapter` response on `server/chat-message`, `server/broadcast`, or
 `requested_by`, and inserts only `channel`, `broadcast`, and `private` rows into
 `beats_monitor_commands`. It must not accept `server/god-command`; GOD commands
 remain tied to the Node adapter and `BEATS_MONITOR_ALLOW_GOD_COMMANDS`.
+Any frontend caller that sends chat through `players/message`,
+`server/chat-message`, or `server/broadcast` must treat HTTP `202` from the
+queue bridge as success; the final delivery state is recorded later in
+`beats_monitor_commands`.
 Because the monitor is not an in-game creature and has no map position, outgoing
 local-chat selections are queued as World Chat (`chat_global`). Normal World
 Chat, Advertising, and Help messages must preserve the exact text the user typed,

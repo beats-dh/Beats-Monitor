@@ -1,4 +1,4 @@
-const cleanupBuildId = "2026-06-12-chat-bridge";
+const cleanupBuildId = "2026-06-13-message-202";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
