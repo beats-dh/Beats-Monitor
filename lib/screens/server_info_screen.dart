@@ -243,6 +243,7 @@ class _ServerInfoScreenState extends State<ServerInfoScreen> with WidgetsBinding
     }
   }
 
+  // ignore: unused_element
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'online':
@@ -466,7 +467,6 @@ class _ServerInfoScreenState extends State<ServerInfoScreen> with WidgetsBinding
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = context.watch<ThemeProvider>().isDarkMode;
     final l10n = AppLocalizations.of(context);
     final websocketService = context.watch<WebSocketService>();
     

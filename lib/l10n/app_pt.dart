@@ -1,25 +1,29 @@
 class AppPt {
   static const Map<String, String> values = {
     // Títulos
-    'app_title': 'Beats Monitor',
+    'app_title': 'Penultima Web',
     'monitor_title': 'Monitor',
     'server_info_title': 'Informações do Servidor',
     'server_status_title': 'Status do Servidor',
     'chat_title': 'Chat',
+    'live_title': 'Live',
+    'logs_title': 'Logs',
     'config_title': 'Configurações',
     'settings': 'Configurações',
     'login': 'Login',
     'online_players_title': 'Jogadores Online',
     'online_players_desc': 'Veja todos os jogadores conectados no momento',
-    
+
     // Descrições
     'monitor_desc': 'Monitoramento em tempo real do sistema',
     'server_info_desc': 'Detalhes e status do servidor',
     'server_status_desc': 'Status atual do servidor',
     'chat_desc': 'Chat em tempo real',
+    'live_desc': 'Visão local do cliente ao vivo',
+    'logs_desc': 'Runtime log e stream de logs do servidor',
     'config_desc': 'Ajustes e preferências',
     'settings_desc': 'Ajustes e preferências',
-    
+
     // Configurações
     'language': 'Idioma',
     'select_language': 'Selecionar idioma',
@@ -33,7 +37,7 @@ class AppPt {
     'server_url': 'URL do Servidor',
     'server_port': 'Porta do Servidor',
     'save_settings': 'Salvar Configurações',
-    
+
     // Monitor
     'cpu_usage': 'Uso de CPU',
     'memory_usage': 'Uso de Memória',
@@ -42,7 +46,8 @@ class AppPt {
     'processes': 'Processos',
     'refresh': 'Atualizar',
     'last_update': 'Última atualização',
-    'monitor_warning': 'As informações exibidas podem apresentar uma margem de erro (±) devido a limitações do sistema operacional.',
+    'monitor_warning':
+        'As informações exibidas podem apresentar uma margem de erro (±) devido a limitações do sistema operacional.',
     'processor_info': 'Informações do Processador',
     'processor_desc': 'Processador',
     'cpu': 'CPU',
@@ -63,7 +68,7 @@ class AppPt {
     'cores': 'Núcleos',
     'architecture': 'Arquitetura',
     'cpu_time_distribution': 'Distribuição de Tempo',
-    
+
     // Login
     'username': 'Usuário',
     'password': 'Senha',
@@ -71,7 +76,7 @@ class AppPt {
     'enter_password': 'Digite sua senha',
     'sign_in': 'Entrar',
     'remember_me': 'Lembrar-me',
-    
+
     // Mensagens
     'error': 'Erro',
     'success': 'Sucesso',
@@ -88,19 +93,32 @@ class AppPt {
     'settings_saved': 'Configurações salvas com sucesso',
     'confirm': 'Confirmar',
     'cancel': 'Cancelar',
+    'back': 'Voltar',
     'logout': 'Sair',
     'logout_confirm': 'Deseja realmente sair?',
     'no_messages_in_channel': 'Nenhuma mensagem no canal ainda',
     'refresh_messages': 'Atualizar mensagens',
     'type_message': 'Sua mensagem...',
-    
+    'type_god_command':
+        'Digite o comando GOD exatamente, ex: /t Player,32365,32242,7',
+    'type_private_message_to': 'Mensagem para {0}',
+    'error_sending_message': 'Não foi possível enviar a mensagem.',
+    'chat_command_queued': 'Mensagem enfileirada para o servidor do jogo.',
+    'god_command_queued': 'Comando GOD enfileirado para o servidor do jogo.',
+    'private_message_format': 'Use: Nome do jogador: mensagem',
+    'god_commands': 'Comandos',
+    'god_commands_desc':
+        'Os comandos são executados como seu personagem no jogo. Digite o comando com barra exatamente como ele deve rodar no jogo.',
+    'no_private_conversations':
+        'Nenhuma mensagem privada enviada para você ainda.',
+
     // Erros
     'error_connection': 'Erro de conexão: {0}',
     'error_status_code': 'Erro no servidor: {0}',
     'error_fetching_status': 'Erro ao buscar status do servidor',
-    'server_timeout': 'Tempo limite de conexão excedido. Servidor não está respondendo.',
-  
-    
+    'server_timeout':
+        'Tempo limite de conexão excedido. Servidor não está respondendo.',
+
     // Server Info Screen
     'state_control': 'Controle de Estado',
     'name': 'Nome',
@@ -111,7 +129,8 @@ class AppPt {
     'warning': 'ATENÇÃO!',
     'confirm_shutdown': 'Tem certeza que deseja desligar o servidor?',
     'warning_action': '⚠️ Esta ação irá:',
-    'shutdown_consequences': '• Desconectar todos os jogadores\n• Garanta que tenha um auto start configurado',
+    'shutdown_consequences':
+        '• Desconectar todos os jogadores\n• Garanta que tenha um auto start configurado',
     'shutdown': 'DESLIGAR',
     'players_online': 'Jogadores Online',
     'online': 'ONLINE',
@@ -128,9 +147,11 @@ class AppPt {
     'connecting': 'Conectando...',
     'update_failed': 'Falha ao atualizar',
     'request_error': 'Erro na requisição',
-    'global_chat': 'Chat Global',
+    'local_chat': 'Chat Local',
+    'global_chat': 'World Chat',
     'trade_chat': 'Chat de Trade',
     'help_chat': 'Chat de Ajuda',
+    'private_chat': 'Mensagens Privadas',
     'status': 'Status',
     'players': 'Jogadores',
     'hours': 'horas',
@@ -158,7 +179,8 @@ class AppPt {
     'broadcast_empty_error': 'Mensagem não pode ser vazia',
     'send': 'Enviar',
     'banned_players_title': 'Jogadores Banidos',
-    'banned_players_desc': 'Veja todos os jogadores atualmente banidos e desbanir se necessário',
+    'banned_players_desc':
+        'Veja todos os jogadores atualmente banidos e desbanir se necessário',
     'no_banned_players': 'Nenhum jogador banido no momento',
     'reason': 'Motivo',
     'banned_at': 'Banido em',
@@ -180,14 +202,15 @@ class AppPt {
     'ban_end': 'Fim',
     'downloading_update': 'Baixando Atualização',
     'close': 'Fechar',
-    
+
     // Diálogo de banimento
     'ban_player_title': 'Banir Jogador',
     'ban_reason': 'Motivo',
 
     'broadcast_title': 'Broadcast',
     'permission_required': 'Permissão necessária',
-    'permission_explanation': 'Para instalar atualizações automaticamente, você precisa permitir a instalação de aplicativos desconhecidos deste aplicativo.\n\nNa próxima tela, habilite "Permitir de esta fonte".',
+    'permission_explanation':
+        'Para instalar atualizações automaticamente, você precisa permitir a instalação de aplicativos desconhecidos deste aplicativo.\n\nNa próxima tela, habilite "Permitir de esta fonte".',
     'new_version': 'Nova versão',
 
     // Modos de visualização
@@ -202,6 +225,21 @@ class AppPt {
     'monitor_connection_status': 'Status: Conectado ao servidor',
     'monitor_connected_tooltip': 'Conectado',
     'monitor_reconnect_tooltip': 'Reconectar',
+
+    // Tela de Logs
+    'runtime_log': 'Runtime log',
+    'runtime_log_empty': 'Aguardando linhas do runtime log',
+    'runtime_log_waiting':
+        'O monitor mostra o final atual do arquivo e adiciona novas linhas em tempo real.',
+    'runtime_log_missing': 'runtime.log nao foi encontrado',
+    'runtime_log_truncated': 'mostrando linhas mais recentes',
+    'runtime_log_autoscroll': 'Auto-scroll',
+    'runtime_log_clear': 'Recarregar log',
+    'log_files_refresh': 'Atualizar arquivos de log',
+    'log_files_empty':
+        'Nenhum arquivo foi encontrado na pasta de logs configurada',
+    'log_files_api_unavailable':
+        'A API ativa ainda nao expoe a pasta de logs. Mostrando runtime.log pelo stream websocket.',
 
     // Tela de Chat
     'refresh_tooltip': 'Atualizar mensagens',
@@ -223,16 +261,33 @@ class AppPt {
     'connection': 'Conexão',
     'server_url_hint': 'http://exemplo.com:3000',
     'auto_reconnect': 'Reconexão Automática',
-    'auto_reconnect_desc': 'Tentar reconectar automaticamente quando perder conexão',
+    'auto_reconnect_desc':
+        'Tentar reconectar automaticamente quando perder conexão',
     'notifications': 'Notificações',
     'system_notifications': 'Notificações do Sistema',
-    'system_notifications_desc': 'Receber alertas sobre o estado do servidor',
+    'system_notifications_desc':
+        'Avisar este app instalado quando o Help Chat receber mensagem ou uma private for enviada para Waldir',
+    'notification_permission': 'Permissão',
+    'notification_permission_granted': 'Notificações de chat ativadas.',
+    'notification_permission_denied':
+        'As notificações não foram permitidas.',
+    'notification_permission_unsupported':
+        'Esta plataforma não suporta notificações.',
+    'web_install_title': 'Instalar app',
+    'web_install_desc':
+        'Instale o Penultima Web neste dispositivo para acesso rápido e notificações.',
+    'web_install_button': 'Instalar',
+    'web_install_started': 'Aviso de instalação aberto.',
+    'web_install_dismissed': 'Instalação cancelada.',
+    'web_install_unavailable':
+        'O aviso de instalação do navegador ainda não está disponível. Use Chrome ou Edge pela barra de endereço se aparecer.',
     'about': 'Sobre',
     'latest_version': 'Você está usando a versão mais recente',
     'developed_by': 'Desenvolvido por',
     'github_soon': 'Em breve: Link do GitHub',
     'save_changes': 'Salvar Alterações',
-    'save_connection_restart': 'Ao salvar, a conexão será reiniciada automaticamente.',
+    'save_connection_restart':
+        'Ao salvar, a conexão será reiniciada automaticamente.',
 
     // Atualizações
     'required_update': 'Esta é uma atualização obrigatória!',
@@ -275,6 +330,7 @@ class AppPt {
     'paladin': 'Paladin',
     'sorcerer': 'Sorcerer',
     'druid': 'Druid',
+    'monk': 'Monk',
     'none': 'Nenhuma',
 
     // Ações de Jogador
@@ -286,5 +342,19 @@ class AppPt {
     'message_error': 'Erro ao enviar mensagem',
     'send_message': 'Enviar Mensagem',
     'message_to_player': 'Mensagem para o jogador',
+
+    // Tela Live
+    'live_character': 'Personagem: {0}',
+    'live_active': 'Ao vivo',
+    'live_idle': 'Pronto',
+    'live_start': 'Iniciar Live',
+    'live_stop': 'Parar Live',
+    'live_starting': 'Iniciando live...',
+    'live_select_source': 'Nenhuma fonte ao vivo selecionada',
+    'live_select_hint':
+        'Escolha a janela do cliente Tibia ou sua tela no aviso do navegador.',
+    'live_not_supported': 'Captura ao vivo não está disponível aqui',
+    'live_web_only':
+        'Abra o monitor web no Chrome ou Edge para capturar uma janela ou tela local.',
   };
 }

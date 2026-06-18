@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.1.0+2
+version: 1.2.0+3
 
 environment:
   sdk: ^3.6.1
@@ -44,6 +44,7 @@ dependencies:
   web_socket_channel: ^3.0.2  # Para conexão WebSocket
   device_info_plus: ^11.2.1  # Para verificar a versão do Android
   material_design_icons_flutter: ^7.0.7296
+  web: ^1.1.0
 
 dev_dependencies:
   flutter_test:
@@ -66,11 +67,10 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
-  
+
   # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  assets:
+    - assets/branding/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -1,12 +1,15 @@
 {
-    "name": "beats_monitor",
-    "short_name": "beats_monitor",
+    "name": "Penultima Web",
+    "short_name": "Penultima Web",
     "start_url": ".",
+    "scope": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "display_override": ["standalone", "window-controls-overlay", "minimal-ui"],
+    "background_color": "#07030C",
+    "theme_color": "#16051F",
+    "description": "Penultima web administration with chat alerts.",
     "orientation": "portrait-primary",
+    "categories": ["utilities", "productivity"],
     "prefer_related_applications": false,
     "icons": [
         {

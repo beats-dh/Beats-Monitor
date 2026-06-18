@@ -1,0 +1,22 @@
+[Unit]
+Description=Penultima Web API
+After=network-online.target mariadb.service mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=penultima
+Group=penultima
+WorkingDirectory=/home/penultima/beats-monitor-api
+EnvironmentFile=/home/penultima/beats-monitor-api/.env
+ExecStart=/home/penultima/beats-monitor-api/node/bin/node /home/penultima/beats-monitor-api/beats-monitor-api.js
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/penultima/beats-monitor-api
+
+[Install]
+WantedBy=multi-user.target

@@ -9,6 +9,7 @@ import 'providers/locale_provider.dart';
 import 'services/websocket_service.dart';
 import 'services/auth_service.dart';
 import 'services/config_service.dart';
+import 'services/update_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'l10n/app_localizations.dart';
@@ -21,7 +22,8 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final configService = ConfigService();
   await configService.init();
-  
+  await UpdateService.instance.init();
+
   final webSocketService = WebSocketService(configService);
   // Inicializa a conexão WebSocket uma única vez para todo o aplicativo
   webSocketService.manualReconnectMode = false;
@@ -40,9 +42,9 @@ void main() async {
   // Configurar SystemUI para edge-to-edge
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.dark,
+    statusBarIconBrightness: Brightness.light,
     systemNavigationBarColor: Colors.transparent,
-    systemNavigationBarIconBrightness: Brightness.dark,
+    systemNavigationBarIconBrightness: Brightness.light,
   ));
 
   // Habilitar edge-to-edge
@@ -57,21 +59,21 @@ void main() async {
         ChangeNotifierProvider<ConfigService>.value(value: configService),
         ChangeNotifierProvider(create: (_) => localeProvider),
       ],
-      child: const BeatsMonitorApp(),
+      child: const PenultimaWebApp(),
     ),
   );
 }
 
-class BeatsMonitorApp extends StatelessWidget {
-  const BeatsMonitorApp({super.key});
+class PenultimaWebApp extends StatelessWidget {
+  const PenultimaWebApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     final localeProvider = context.watch<LocaleProvider>();
-    
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Beats Monitor',
+      title: 'Penultima Web',
       locale: localeProvider.locale,
       supportedLocales: const [
         Locale('pt'),
@@ -84,19 +86,19 @@ class BeatsMonitorApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       theme: context.watch<ThemeProvider>().theme.copyWith(
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          systemOverlayStyle: SystemUiOverlayStyle(
-            statusBarColor: Colors.transparent,
-            statusBarIconBrightness: Brightness.dark,
-            systemNavigationBarColor: Colors.transparent,
-            systemNavigationBarIconBrightness: Brightness.dark,
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              systemOverlayStyle: SystemUiOverlayStyle(
+                statusBarColor: Colors.transparent,
+                statusBarIconBrightness: Brightness.light,
+                systemNavigationBarColor: Colors.transparent,
+                systemNavigationBarIconBrightness: Brightness.light,
+              ),
+              scrolledUnderElevation: 0,
+              surfaceTintColor: Colors.transparent,
+            ),
           ),
-          scrolledUnderElevation: 0,
-          surfaceTintColor: Colors.transparent,
-        ),
-      ),
       home: Consumer<AuthProvider>(
         builder: (context, authProvider, child) {
           if (authProvider.isAuthenticated) {

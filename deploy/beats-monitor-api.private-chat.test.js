@@ -1,0 +1,138 @@
+const assert = require("node:assert/strict");
+const test = require("node:test");
+
+process.env.BEATS_MONITOR_TOKEN_SECRET = "test-token-secret-that-is-long-enough";
+process.env.BEATS_MONITOR_USER = "admin";
+process.env.BEATS_MONITOR_PASSWORD = "admin";
+process.env.BEATS_MONITOR_REQUIRED_PLAYER_NAME = "Waldir";
+process.env.BEATS_MONITOR_GAME_AUTH = "false";
+
+const {
+  chatCommandFromRequest,
+  chatHistoryWhereSql,
+  mysqlArgsForConfig,
+  privateRowVisibleToIdentity
+} = require("./beats-monitor-api");
+
+const waldir = { subject: "wmshuee@gmail.com", account_id: 8, player: "Waldir" };
+
+test("private history includes all private messages for the monitor", () => {
+  assert.equal(
+    privateRowVisibleToIdentity({ channel_key: "chat_private", player_name: "Waldir", message: "to Tankso: test" }, waldir),
+    true
+  );
+  assert.equal(
+    privateRowVisibleToIdentity({ channel_key: "chat_private", player_name: "Tankso", message: "to Waldir: answer" }, waldir),
+    true
+  );
+  assert.equal(
+    privateRowVisibleToIdentity({ channel_key: "chat_private", player_name: "Tankso", message: "to Another: hidden" }, waldir),
+    true
+  );
+  assert.equal(
+    privateRowVisibleToIdentity({ channel_key: "chat_private", player_name: "Tankso", message: "to Waldirx: hidden" }, waldir),
+    true
+  );
+  assert.equal(
+    privateRowVisibleToIdentity({ channel_key: "chat_private", player_name: "Tankso", message: "to Waldir: answer" }, {}),
+    true
+  );
+});
+
+test("private history query includes the full private channel", () => {
+  const whereSql = chatHistoryWhereSql(["chat_global", "chat_private"], waldir);
+
+  assert.match(whereSql, /channel_key IN \('chat_global'\)/);
+  assert.match(whereSql, /channel_key = 'chat_private'/);
+  assert.doesNotMatch(whereSql, /player_name = 'Waldir'/);
+  assert.doesNotMatch(whereSql, /message LIKE 'to Waldir:%'/);
+});
+
+test("private send command is queued as the authenticated monitor player", () => {
+  const command = chatCommandFromRequest(
+    "server/chat-message",
+    { channel: "chat_private", target: "Tankso", message: "já não" },
+    waldir
+  );
+
+  assert.equal(command.action, "private");
+  assert.equal(command.channel_key, "chat_private");
+  assert.equal(command.target_name, "Tankso");
+  assert.equal(command.message, "já não");
+  assert.equal(command.requested_by, "Waldir");
+  assert.equal(command.requested_by_account_id, 8);
+});
+
+test("mysql commands force utf8mb4 for chat text", () => {
+  const args = mysqlArgsForConfig({
+    socket: "/var/run/mysqld/mysqld.sock",
+    user: "penultima",
+    database: "penultima"
+  }, "SELECT 'já não';");
+
+  assert.ok(args.includes("--default-character-set=utf8mb4"));
+});
+
+test("god command is queued exactly as typed by the authenticated monitor player", () => {
+  const command = chatCommandFromRequest(
+    "server/god-command",
+    { command: "/t Tankso,32365,32242,7" },
+    waldir
+  );
+
+  assert.equal(command.action, "god_command");
+  assert.equal(command.channel_key, "chat_global");
+  assert.equal(command.message, "/t Tankso,32365,32242,7");
+  assert.equal(command.requested_by, "Waldir");
+  assert.equal(command.requested_by_account_id, 8);
+});
+
+test("slash commands typed in normal chat are sent exactly to that channel", () => {
+  const command = chatCommandFromRequest(
+    "server/chat-message",
+    { channel: "chat_help", message: "/t Tankso,32365,32242,7" },
+    waldir
+  );
+
+  assert.equal(command.action, "channel");
+  assert.equal(command.channel_key, "chat_help");
+  assert.equal(command.message, "/t Tankso,32365,32242,7");
+});
+
+test("command-prefixed normal chat can be queued as a game command", () => {
+  const command = chatCommandFromRequest(
+    "server/chat-message",
+    { channel: "chat_help", message: "/t Tankso,32365,32242,7", as_command: true },
+    waldir
+  );
+
+  assert.equal(command.action, "god_command");
+  assert.equal(command.channel_key, "chat_global");
+  assert.equal(command.message, "/t Tankso,32365,32242,7");
+  assert.equal(command.requested_by, "Waldir");
+});
+
+test("command-prefixed private messages can be queued as a game command", () => {
+  const command = chatCommandFromRequest(
+    "players/message",
+    { name: "Tankso", message: "!commands", as_command: true },
+    waldir
+  );
+
+  assert.equal(command.action, "god_command");
+  assert.equal(command.channel_key, "chat_global");
+  assert.equal(command.message, "!commands");
+  assert.equal(command.requested_by, "Waldir");
+});
+
+test("local monitor chat is routed to world chat because monitor has no map position", () => {
+  const command = chatCommandFromRequest(
+    "server/chat-message",
+    { channel: "chat_local", message: "teste" },
+    waldir
+  );
+
+  assert.equal(command.action, "channel");
+  assert.equal(command.channel_key, "chat_global");
+  assert.equal(command.message, "teste");
+});

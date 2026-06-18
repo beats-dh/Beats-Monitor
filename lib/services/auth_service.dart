@@ -49,11 +49,11 @@ class AuthService {
       
       final response = await http.post(
         url,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
+        headers: {'Content-Type': 'application/json; charset=utf-8'},
+        body: utf8.encode(json.encode({
           'username': username,
           'password': password,
-        }),
+        })),
       ).timeout(
         const Duration(seconds: 5),
         onTimeout: () {
@@ -165,7 +165,7 @@ class AuthService {
   static Map<String, String> get authHeaders {
     return {
       'Authorization': 'Bearer $_token',
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/json; charset=utf-8',
     };
   }
 }

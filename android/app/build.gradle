@@ -45,7 +45,7 @@ android {
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
             if (variant.buildType.name == "release") {
-                output.outputFileName = "beats_Monitor_Release_1.0.0.apk"
+                output.outputFileName = "penultima_Web_Release_1.2.0.apk"
             }
         }
     }
