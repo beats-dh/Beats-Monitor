@@ -31,8 +31,8 @@ const ALLOW_GOD_COMMANDS = parseBoolean(process.env.BEATS_MONITOR_ALLOW_GOD_COMM
 const REQUIRE_FRESH_GAME_BRIDGE = parseBoolean(process.env.BEATS_MONITOR_REQUIRE_FRESH_GAME_BRIDGE || "false");
 const LOG_ROOT = path.resolve(process.env.BEATS_MONITOR_LOG_ROOT || path.join(SERVER_ROOT, "logs"));
 const RUNTIME_LOG_FILE = process.env.BEATS_MONITOR_RUNTIME_LOG_FILE || "runtime.log";
-const LOG_TAIL_BYTES = Number.parseInt(process.env.BEATS_MONITOR_LOG_TAIL_BYTES || String(256 * 1024), 10);
-const LOG_HISTORY_LIMIT_LINES = Number.parseInt(process.env.BEATS_MONITOR_LOG_HISTORY_LIMIT_LINES || "1000", 10);
+const LOG_TAIL_BYTES = Number.parseInt(process.env.BEATS_MONITOR_LOG_TAIL_BYTES || String(64 * 1024), 10);
+const LOG_HISTORY_LIMIT_LINES = Number.parseInt(process.env.BEATS_MONITOR_LOG_HISTORY_LIMIT_LINES || "300", 10);
 const LOG_POLL_MS = Number.parseInt(process.env.BEATS_MONITOR_LOG_POLL_MS || "1000", 10);
 
 if (!TOKEN_SECRET || TOKEN_SECRET.length < 32) {
@@ -812,12 +812,13 @@ function isMonitorGodCommandText(message) {
 function chatCommandFromRequest(route, body, identity) {
   const actor = identity?.player || identity?.subject || "Penultima";
   const accountId = toInt(identity?.account_id);
+  const commandText = body.command || body.message || "";
 
-  if (route === "server/god-command") {
+  if (route === "server/god-command" || (body.as_command === true && isMonitorGodCommandText(commandText))) {
     return {
       action: "god_command",
       channel_key: "chat_global",
-      message: body.command || body.message || "",
+      message: commandText,
       requested_by: actor,
       requested_by_account_id: accountId
     };

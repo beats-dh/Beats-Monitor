@@ -14,9 +14,13 @@ void main() {
     );
   });
 
-  test('uses chat bridge only for the disabled production chat response', () {
+  test('uses chat bridge for disabled production chat and command responses', () {
     final disabled = http.Response(
       '{"mensagem":"Chat sending is disabled in this production adapter."}',
+      403,
+    );
+    final disabledGod = http.Response(
+      '{"mensagem":"God commands are disabled in this production adapter."}',
       403,
     );
 
@@ -31,10 +35,18 @@ void main() {
     expect(
       ApiService.shouldUseChatBridgeFallbackForResponse(
         'server/god-command',
-        disabled,
+        disabledGod,
         isWeb: true,
       ),
-      isFalse,
+      isTrue,
+    );
+    expect(
+      ApiService.shouldUseChatBridgeFallbackForResponse(
+        'server/chat-message',
+        disabledGod,
+        isWeb: true,
+      ),
+      isTrue,
     );
     expect(
       ApiService.shouldUseChatBridgeFallbackForResponse(

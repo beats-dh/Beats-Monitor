@@ -13,6 +13,7 @@ class ApiService {
     'players/message',
     'server/broadcast',
     'server/chat-message',
+    'server/god-command',
   };
 
   static Future<bool> _refreshTokenIfNeeded() async {
@@ -55,10 +56,11 @@ class ApiService {
       return false;
     }
 
-    final text = utf8.decode(response.bodyBytes, allowMalformed: true);
+    final text =
+        utf8.decode(response.bodyBytes, allowMalformed: true).toLowerCase();
     return text
-        .toLowerCase()
-        .contains('chat sending is disabled in this production adapter');
+            .contains('chat sending is disabled in this production adapter') ||
+        text.contains('god commands are disabled in this production adapter');
   }
 
   static Future<http.Response> _postChatBridgeFallback(

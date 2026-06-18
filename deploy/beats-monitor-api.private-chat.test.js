@@ -99,6 +99,32 @@ test("slash commands typed in normal chat are sent exactly to that channel", () 
   assert.equal(command.message, "/t Tankso,32365,32242,7");
 });
 
+test("command-prefixed normal chat can be queued as a game command", () => {
+  const command = chatCommandFromRequest(
+    "server/chat-message",
+    { channel: "chat_help", message: "/t Tankso,32365,32242,7", as_command: true },
+    waldir
+  );
+
+  assert.equal(command.action, "god_command");
+  assert.equal(command.channel_key, "chat_global");
+  assert.equal(command.message, "/t Tankso,32365,32242,7");
+  assert.equal(command.requested_by, "Waldir");
+});
+
+test("command-prefixed private messages can be queued as a game command", () => {
+  const command = chatCommandFromRequest(
+    "players/message",
+    { name: "Tankso", message: "!commands", as_command: true },
+    waldir
+  );
+
+  assert.equal(command.action, "god_command");
+  assert.equal(command.channel_key, "chat_global");
+  assert.equal(command.message, "!commands");
+  assert.equal(command.requested_by, "Waldir");
+});
+
 test("local monitor chat is routed to world chat because monitor has no map position", () => {
   const command = chatCommandFromRequest(
     "server/chat-message",

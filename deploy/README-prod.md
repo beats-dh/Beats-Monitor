@@ -105,10 +105,14 @@ bundle after a no-restart static deploy.
 
 Runtime logs are read directly and read-only from `BEATS_MONITOR_LOG_ROOT`.
 By default this is `/home/penultima/Penultima-Server/logs`, and the live view
-tails `runtime.log` over the existing authenticated WebSocket connection. The UI
-also lists the complete recursive log folder through `GET /server/logs` and
-loads a selected file through `GET /server/logs/file/{encodedPath}`. This does
-not control, signal, reload, or restart the game process.
+tails a bounded `runtime.log` snapshot over the existing authenticated WebSocket
+connection. The default runtime snapshot is intentionally small
+(`BEATS_MONITOR_LOG_TAIL_BYTES=65536` and
+`BEATS_MONITOR_LOG_HISTORY_LIMIT_LINES=300`) so the command center does not show
+a giant runtime log on every refresh. The UI also lists the complete recursive
+log folder through `GET /server/logs` and loads a selected bounded file tail
+through `GET /server/logs/file/{encodedPath}`. This does not control, signal,
+reload, or restart the game process.
 
 When the live Node adapter cannot be restarted yet, publish
 `web/beats_monitor_logs.php` with the static bundle. It is executed from
@@ -159,25 +163,24 @@ binary on disk is newer than the running game process.
 When the live Node adapter is older or still has chat sending disabled and it
 cannot be restarted, publish `web/beats_monitor_chat.php` with the static bundle.
 The Flutter REST wrapper must try the Node route first, then fall back to this
-PHP bridge only for the known `Chat sending is disabled in this production
-adapter` response on `server/chat-message`, `server/broadcast`, or
-`players/message`. The bridge validates the same monitor bearer token against
+PHP bridge only for the known disabled production-adapter responses on
+`server/chat-message`, `server/broadcast`, `players/message`, or
+`server/god-command`. The bridge validates the same monitor bearer token against
 `GET /api/v1/server/status`, decodes the already-validated token identity for
-`requested_by`, and inserts only `channel`, `broadcast`, and `private` rows into
-`beats_monitor_commands`. It must not accept `server/god-command`; GOD commands
-remain tied to the Node adapter and `BEATS_MONITOR_ALLOW_GOD_COMMANDS`.
+`requested_by`, and inserts `channel`, `broadcast`, `private`, or `god_command`
+rows into `beats_monitor_commands`.
 Any frontend caller that sends chat through `players/message`,
 `server/chat-message`, or `server/broadcast` must treat HTTP `202` from the
 queue bridge as success; the final delivery state is recorded later in
 `beats_monitor_commands`.
 Because the monitor is not an in-game creature and has no map position, outgoing
-local-chat selections are queued as World Chat (`chat_global`). Normal World
-Chat, Advertising, and Help messages must preserve the exact text the user typed,
-including `!` or `/` prefixes such as `use !task`, and the game-side command
-consumer sends them with `TALKTYPE_CHANNEL_O` so they appear in the orange GOD
-channel style. Only the explicit Commands tab / `server/god-command` route queues
-`god_command`; do not auto-promote slash or bang text typed in normal chat
-channels into commands.
+local-chat selections are queued as World Chat (`chat_global`). World Chat,
+Advertising, Help, and private messages preserve the destination selected by the
+user, but command-prefixed text is marked with `as_command` by the Flutter
+client so the Node adapter or PHP bridge queues it as `god_command`. The
+game-side consumer also sends online monitor channel/private rows through
+`Game.playerSay`, so older clients that omit `as_command` still pass through the
+normal talkaction/spell resolver before falling back to ordinary chat delivery.
 The Chat screen itself must render messages like the in-game console, not like
 app bubbles: `HH:mm:ss Player [level]: message`, with GOD/channel text in the
 same red/orange/yellow family used by the client. Do not disable the input just
@@ -185,11 +188,12 @@ because the WebSocket stream is disconnected; REST chat submission still queues
 against the monitor bridge so the character does not need to be online for
 normal channel/private messages.
 God command execution uses the same queue with action `god_command`; keep
-`BEATS_MONITOR_ALLOW_GOD_COMMANDS=false` unless the server build includes
-`Game.playerSay` in Lua and the command must be enabled for the configured GOD
-character. Offline command execution depends on the C++/Lua game process loading
-an offline player through `Game.getOfflinePlayer`, so it only becomes live after
-a normal approved game-server restart loads the deployed binary.
+`BEATS_MONITOR_ALLOW_GOD_COMMANDS=false` in the Node adapter unless direct Node
+command queuing is explicitly enabled. The PHP bridge can still queue
+`god_command` during no-restart static deploys after validating the same bearer
+token. Offline command execution depends on the C++/Lua game process loading an
+offline player through `Game.getOfflinePlayer`, so it only becomes live after a
+normal approved game-server restart loads the deployed binary.
 
 ## Activation
 

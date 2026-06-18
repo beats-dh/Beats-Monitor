@@ -41,6 +41,11 @@ class _OnlinePlayersScreenState extends State<OnlinePlayersScreen> {
   bool _isQueuedMessageAccepted(int statusCode) =>
       statusCode == 200 || statusCode == 202;
 
+  bool _isCommandText(String text) {
+    final trimmed = text.trimLeft();
+    return trimmed.startsWith('/') || trimmed.startsWith('!');
+  }
+
   List<dynamic> _filterPlayers(List<dynamic> players) {
     return players.where((player) {
       final name = (player['name'] ?? '').toString().toLowerCase();
@@ -462,7 +467,10 @@ class _OnlinePlayersScreenState extends State<OnlinePlayersScreen> {
                                                           'players/message',
                                                           body: {
                                                         "name": player['name'],
-                                                        "message": message
+                                                        "message": message,
+                                                        "as_command":
+                                                            _isCommandText(
+                                                                message)
                                                       });
 
                                                   if (!mounted) return;

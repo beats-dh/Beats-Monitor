@@ -477,6 +477,7 @@ class _ChatScreenState extends State<ChatScreen>
             "channel": "chat_private",
             "target": parsed['target'],
             "message": parsed['message'],
+            "as_command": _isCommandText(text),
           },
         );
         if (replyTarget == null) {
@@ -491,6 +492,7 @@ class _ChatScreenState extends State<ChatScreen>
           body: {
             "channel": _outgoingChannelForSelection(text),
             "message": text.trim(),
+            "as_command": _isCommandText(text),
           },
         );
       }

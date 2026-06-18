@@ -144,6 +144,15 @@ function command_from_payload(array $payload, array $identity): array
         'requested_by_account_id' => max(0, (int) ($identity['account_id'] ?? 0)),
     ];
 
+    if ($endpoint === 'server/god-command' || command_requested($body)) {
+        return $base + [
+            'action' => 'god_command',
+            'channel_key' => 'chat_global',
+            'target_name' => '',
+            'message' => chat_message($body['command'] ?? $body['message'] ?? ''),
+        ];
+    }
+
     if ($endpoint === 'server/broadcast') {
         return $base + [
             'action' => 'broadcast',
@@ -194,6 +203,16 @@ function normalize_endpoint(string $endpoint): string
     $endpoint = trim($endpoint);
     $endpoint = preg_replace('#^/+api/v1/+?#', '', $endpoint) ?? $endpoint;
     return trim($endpoint, '/');
+}
+
+function command_requested(array $body): bool
+{
+    if (($body['as_command'] ?? false) !== true) {
+        return false;
+    }
+
+    $message = ltrim((string) ($body['command'] ?? $body['message'] ?? ''));
+    return $message !== '' && ($message[0] === '/' || $message[0] === '!');
 }
 
 function chat_message(mixed $value): string

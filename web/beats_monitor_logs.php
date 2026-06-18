@@ -4,8 +4,10 @@ declare(strict_types=1);
 $logRoot = getenv('BEATS_MONITOR_LOG_ROOT') ?: '/home/penultima/Penultima-Server/logs';
 $runtimeLogFile = getenv('BEATS_MONITOR_RUNTIME_LOG_FILE') ?: 'runtime.log';
 $apiValidateUrl = getenv('BEATS_MONITOR_VALIDATE_URL') ?: 'http://127.0.0.1:51842/api/v1/server/status';
-$tailBytes = (int) (getenv('BEATS_MONITOR_LOG_TAIL_BYTES') ?: (256 * 1024));
+$tailBytes = (int) (getenv('BEATS_MONITOR_LOG_TAIL_BYTES') ?: (64 * 1024));
 $tailBytes = max(4096, min($tailBytes, 1024 * 1024));
+$tailLines = (int) (getenv('BEATS_MONITOR_LOG_HISTORY_LIMIT_LINES') ?: 300);
+$tailLines = max(50, min($tailLines, 5000));
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
@@ -28,7 +30,7 @@ if ($action === 'list') {
 }
 
 if ($action === 'file') {
-    read_log_file($logRoot, (string) ($_GET['path'] ?? ''), $tailBytes);
+    read_log_file($logRoot, (string) ($_GET['path'] ?? ''), $tailBytes, $tailLines);
 }
 
 json_response(400, ['sucesso' => false, 'mensagem' => 'Invalid action.']);
@@ -149,7 +151,7 @@ function list_logs(string $logRoot, string $runtimeLogFile): void
     ]);
 }
 
-function read_log_file(string $logRoot, string $relativePath, int $tailBytes): void
+function read_log_file(string $logRoot, string $relativePath, int $tailBytes, int $tailLines): void
 {
     $root = realpath($logRoot);
     if ($root === false || !is_dir($root)) {
@@ -194,8 +196,8 @@ function read_log_file(string $logRoot, string $relativePath, int $tailBytes): v
     $content = str_replace(["\r\n", "\r"], "\n", $content);
     $content = rtrim($content, "\n");
     $lines = $content === '' ? [] : explode("\n", $content);
-    if (count($lines) > 5000) {
-        $lines = array_slice($lines, -5000);
+    if (count($lines) > $tailLines) {
+        $lines = array_slice($lines, -$tailLines);
     }
 
     json_response(200, [

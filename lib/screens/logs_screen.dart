@@ -56,7 +56,7 @@ class LogsScreen extends StatefulWidget {
 }
 
 class _LogsScreenState extends State<LogsScreen> with WidgetsBindingObserver {
-  static const int _maxLines = 3000;
+  static const int _maxLines = 500;
   static const Duration _logsBridgeTimeout = Duration(seconds: 10);
 
   final ScrollController _scrollController = ScrollController();
